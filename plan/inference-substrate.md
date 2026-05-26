@@ -45,6 +45,6 @@ Verified end-to-end on **2026-05-26** by probing + SSH. This supersedes the orig
 - [x] Embeddings `/embed` → 1024-d vector
 - [x] Groq `llama-3.3-70b-versatile` completes (key valid)
 - [x] **TTS (Kokoro `:8880`)** works — synthesized valid 24 kHz WAV (~55 s on CPU; it's a CPU container)
-- [~] **STT (Speaches `:8890`)** service is up but the cached `faster-whisper-large-v3-turbo` model card is **corrupted** (HTTP 500, Speaches v0.8.0 breaking change). Fix = delete + re-download the model; switching to a **small** whisper model (faster on CPU, better for real-time voice-in). Phase 7 dependency — not on the Phase 0 critical path.
+- [x] **STT (Speaches `:8890`)** works — round-trip verified: Kokoro "Johnny Five is alive." → Speaches → `"Johnny 5 is alive."` (~22 s). The bundled `faster-whisper-large-v3-turbo` was corrupted (HTTP 500, Speaches v0.8.0 breaking change); **fixed by pulling `Systran/faster-whisper-small`** (`POST /v1/models/Systran/faster-whisper-small`) — also lighter/faster on CPU, better for real-time voice-in. Use `STT_MODEL=Systran/faster-whisper-small`.
 
 > **Voice CPU note:** Kokoro + Speaches are CPU containers — TTS took ~55 s for one short phrase. Fine for occasional unprompted speech, but Phase 7 must treat voice latency as significant (stream/queue it; don't block the cognitive cycle on TTS/STT).

@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────
+#  Johnny 5 — pre-commit credential guard
+#  Blocks commits that contain secrets or tracked env files.
+#  Enable once per clone:  git config core.hooksPath .githooks
+# ─────────────────────────────────────────────────────────────
+set -euo pipefail
+
+red()   { printf '\033[31m%s\033[0m\n' "$1"; }
+green() { printf '\033[32m%s\033[0m\n' "$1"; }
+
+fail=0
+
+# Files staged for commit (added/copied/modified), names only.
+mapfile -t staged < <(git diff --cached --name-only --diff-filter=ACM)
+[ ${#staged[@]} -eq 0 ] && exit 0
+
+# 1) Never commit real env / secret files.
+for f in "${staged[@]}"; do
+  case "$f" in
+    .env|.env.*)
+      [ "$f" = ".env.example" ] && continue
+      red "✗ Refusing to commit env file: $f"; fail=1 ;;
+    *.pem|*.key|*.p12|*.pfx|service-account*.json|*-credentials*|*_secret*)
+      red "✗ Refusing to commit secret file: $f"; fail=1 ;;
+  esac
+done
+
+# 2) Scan staged content for secret-shaped values.
+#    Patterns are intentionally specific to avoid false positives on the
+#    SPEC/README which legitimately mention variable NAMES.
+patterns=(
+  'gsk_[A-Za-z0-9]{20,}'                              # Groq / OpenAI-style keys
+  'gh[pousr]_[A-Za-z0-9]{20,}'                         # GitHub tokens
+  'xox[baprs]-[A-Za-z0-9-]{10,}'                       # Slack tokens
+  'AKIA[0-9A-Z]{16}'                                   # AWS access key id
+  '-----BEGIN [A-Z ]*PRIVATE KEY-----'                 # private keys
+  '(password|passwd|secret|api[_-]?key|token)[[:space:]]*[:=][[:space:]]*["'\''][^"'\'' ]{8,}["'\'']'
+)
+
+for f in "${staged[@]}"; do
+  # only scan text files that still exist
+  [ -f "$f" ] || continue
+  for p in "${patterns[@]}"; do
+    # `-e` so patterns beginning with '-' (e.g. PRIVATE KEY) aren't read as flags.
+    if git show ":$f" 2>/dev/null | grep -nEq -e "$p"; then
+      red "✗ Possible secret in $f (pattern: $p)"
+      git show ":$f" | grep -nE -e "$p" | sed 's/^/    /' | head -3
+      fail=1
+    fi
+  done
+done
+
+if [ "$fail" -ne 0 ]; then
+  red "✗ Commit blocked by credential guard. Move secrets to .env (gitignored)."
+  red "  Override only if you are certain:  git commit --no-verify"
+  exit 1
+fi
+
+green "✓ Credential guard passed."
+exit 0

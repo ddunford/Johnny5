@@ -1,0 +1,68 @@
+# ─── Secrets & environment ─── NEVER commit these ───
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials*
+*-credentials*
+*_secret*
+service-account*.json
+.envrc
+
+# ─── Johnny's living state (private, never public) ───
+# His memory, identity, and self-edits are personal and may contain
+# sensitive material gathered from the web / conversations.
+data/
+memory/
+snapshots/
+backups/
+config/runtime/          # live mutable prompts/agents Johnny rewrites at runtime
+*.db
+*.sqlite
+*.sqlite3
+pgdata/
+redisdata/
+
+# ─── Python ───
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# ─── Node / web ───
+node_modules/
+web/dist/
+web/build/
+.vite/
+*.local
+
+# ─── Voice / models / large artifacts ───
+*.wav
+*.mp3
+*.onnx
+models/
+.artifacts/
+test-results/
+playwright-report/
+
+# ─── Editor / OS ───
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.log

@@ -2,9 +2,8 @@
 """Turn a plain TTS WAV into Johnny's synthetic-robot voice.
 
 A small, dependency-light DSP chain (numpy + stdlib `wave` only) applied as a
-post-process on top of any base TTS (we use Kokoro). The goal is the *character*
-of a Short Circuit-style robot — eager, metallic, lightly digital — as an
-ORIGINAL voice, not a clone of the film's actor.
+post-process on top of any base TTS (we use Kokoro). The goal is an eager,
+metallic, lightly-digital robot character.
 
 Usage:
     python3 johnnify.py in.wav out.wav [--preset subtle|johnny|heavy]

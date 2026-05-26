@@ -59,11 +59,11 @@ The substrate Johnny runs on. No cognition yet — this phase makes "the lights 
 - [ ] `TASK-0.9` Stub `core/governors.py` reading `llm_call_log` for daily budget (enforcement deferred to Phase 6) → `/fastapi-engineer`
 - [ ] `TASK-0.10` ⫘ Structured JSON logging + correlation IDs + Sentry on the exception handler → `/observability-engineer`
 - [ ] `TASK-0.11` `GET /api/health` reporting all six dependencies → `/fastapi-engineer` [TC-0.1, TC-0.2]
-- [ ] `TASK-0.12` ⫘ CI workflow: ruff + mypy + pytest on PR → `/devops-deployment-engineer`
+- [ ] `TASK-0.12` ⫘ CI workflow: ruff + mypy + pytest on PR → `/devops-deployment-engineer` [TC-0.7]
 - [ ] `TASK-0.13` Contract tests for Groq + Qwen adapters (response-envelope fixtures → projection) → `/qa-test-engineer` [TC-0.3]
 - [ ] `TASK-0.14` Router resilience tests: circuit opens, fails over to local, recovers (frozen-clock) → `/qa-test-engineer` [TC-0.4]
 - [ ] `TASK-0.15` Live verification against real `inference.lan` + Groq: real completion both providers, real 1024-d embedding, forced-failover smoke → `/qa-test-engineer` [TC-0.3, TC-0.4, TC-0.5]
-- [ ] `TASK-0.16` ⫘ OWASP/secrets review: `.env` handling, no creds in logs/Sentry, hook active, health endpoint not leaking internals → `/security-reviewer`
+- [ ] `TASK-0.16` ⫘ OWASP/secrets review: `.env` handling, no creds in logs/Sentry, hook active, health endpoint not leaking internals → `/security-reviewer` [TC-0.6]
 
 ## Notes
 - This phase ships no cognition and no UI — verification is via `ctl.sh`, the health endpoint, and pytest. No Playwright yet (no pages).

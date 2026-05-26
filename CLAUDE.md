@@ -9,8 +9,8 @@
 | Backend / core | Python 3.12, FastAPI (async), asyncio task per inner agent |
 | Event bus / workspace | Redis pub/sub (Global Workspace) + Redis for working-memory & drive state |
 | Database | PostgreSQL 16 + pgvector (1024-d, BGE-M3) |
-| Local inference | Ollama Qwen3.5 9B (text+vision) `inference.lan:8000/8001`, TEI embeddings `:8002`, YOLO11 `:8003` |
-| Cloud inference | Groq (OpenAI-compatible, Llama 3.3 70B) for heavy reasoning |
+| Local inference | Ollama (2× RTX 3060, both GPUs) `inference.lan:8000`: **`gemma4:e4b`** (fast, multimodal/vision, tool-calling, GPU-resident) + **`qwen3.5-9b-128k`** (heavier, on-demand). Embeddings `:8002` `POST /embed`→`{embeddings}` bge-m3 1024-d. YOLO `:8003`. See `plan/inference-substrate.md` |
+| Cloud inference | Groq (OpenAI-compatible, `llama-3.3-70b-versatile`) for heavy reasoning |
 | Frontend | React 19 + Vite (TypeScript), WebSocket for live consciousness/state streams |
 | Voice | faster-whisper (STT), Piper (TTS), openWakeWord — Phase 7 |
 | Config store | git-backed (versioned prompts, drive params, inner-agent registry) |
@@ -76,7 +76,7 @@ This project is ~90% custom build. Closest composition: **`realtime-ai`** (FastA
 - **API base:** `/api/v1/`. WebSocket: `/ws/consciousness`, `/ws/state`.
 - **Auth:** single-token / Traefik basic-auth gate on the web UI. No user system.
 - **Env:** `.env` (see `.env.example`). `.env.testing` with `POSTGRES_DB=johnny5_test`. Never the dev DB for tests.
-- **Inference:** always prefix system prompts with `/no_think` for Qwen structured output. LLM access only via `brain/llm/` router.
+- **Inference:** primary local model is `gemma4:e4b` (clean `content`, multimodal). `qwen3.5-9b-128k` is a "thinking" model — its adapter must read the reasoning channel, not assume `content`. LLM access only via `brain/llm/` router. Full verified substrate + quirks in `plan/inference-substrate.md`.
 - **Git hooks:** `.githooks/pre-commit` credential guard. `git config core.hooksPath .githooks` after clone.
 - **Privacy:** never commit `data/`, `memory/`, `snapshots/`, `config/runtime/`, or any `.env`.
 - **Naming:** no phase numbers or plan metadata in code. Inner agents named for their cognitive role.

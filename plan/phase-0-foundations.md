@@ -16,8 +16,8 @@ The substrate Johnny runs on. No cognition yet — this phase makes "the lights 
 
 **Internal interfaces (not HTTP — used by the Mind):**
 - `LLMRouter.complete(role, messages, schema=None) -> Completion` — picks provider by role, enforces circuit breaker, retries-with-feedback on schema-validation failure, falls back down the chain, logs the call.
-- `Embedder.embed(texts) -> list[Vector1024]` — TEI BGE-M3 client.
-- `Vision.describe(image, prompt) -> str` — Qwen vision; `Detector.detect(image) -> list[Box]` — YOLO11.
+- `Embedder.embed(texts) -> list[Vector1024]` — calls `POST :8002/embed {"inputs"}` → `{"embeddings":[[...]]}` (custom server, NOT TEI native). 1024-d.
+- `Vision.describe(image, prompt) -> str` — **`gemma4:e4b`** (multimodal, verified) via the router; `Detector.detect(image) -> list[Box]` — YOLO11 `:8003`.
 
 **Service modules:**
 - `brain/llm/router.py` — provider chain per role, circuit breaker, retry, logging.
@@ -26,8 +26,8 @@ The substrate Johnny runs on. No cognition yet — this phase makes "the lights 
 - `core/governors.py` (stub this phase) — reads `llm_call_log` to enforce the daily budget; full enforcement Phase 6.
 
 **Key patterns (non-obvious):**
-- Always prefix Qwen system prompts with `/no_think` for structured output, else `content` is empty and reasoning eats the tokens (`local/inference-services.md`).
-- Circuit breaker per provider: open after 3–5 consecutive failures, auto-reset after 60s. When Groq's circuit is open, roles that default to Groq transparently use local Qwen ("tired") rather than erroring.
+- Model quirks are real and verified (`plan/inference-substrate.md`): **`gemma4:e4b`** returns clean `content` and is the primary local model; **`qwen3.5-9b-128k`** is a *thinking* model that returns empty `content` (reasoning in a separate channel) — its adapter must extract from the reasoning channel or it'll look broken. Do not assume `/no_think` fixes it.
+- Circuit breaker per provider: open after 3–5 consecutive failures, auto-reset after 60s. When Groq's circuit is open, roles that default to Groq transparently fall to a local model ("tired") rather than erroring.
 - Retry-with-feedback: on a schema-validation failure, re-prompt the same provider once with the validation error appended before failing over.
 - Provider chain is **per role**, config-driven (e.g. `deliberation = [groq, qwen]`, `narrator = [qwen]`).
 
@@ -54,8 +54,8 @@ The substrate Johnny runs on. No cognition yet — this phase makes "the lights 
 - [ ] `TASK-0.4` Alembic baseline + enable pgvector + `llm_call_log` migration → `/fastapi-engineer`
 - [ ] `TASK-0.5` Redis connection helper + ping; Postgres async session/repository base → `/fastapi-engineer`
 - [ ] `TASK-0.6` Implement LLM router: per-role provider chain, circuit breaker, retry-with-feedback, call logging → `/fastapi-engineer` [TC-0.3, TC-0.4]
-- [ ] `TASK-0.7` ⫘ Groq + Ollama provider adapters (OpenAI-compatible, `/no_think` for Qwen) → `/fastapi-engineer` [TC-0.3]
-- [ ] `TASK-0.8` ⫘ Embeddings (TEI BGE-M3) + vision (Qwen) + YOLO clients → `/fastapi-engineer` [TC-0.5]
+- [ ] `TASK-0.7` ⫘ Groq + Ollama provider adapters (OpenAI-compatible; gemma4 clean `content`; qwen3.5-9b reasoning-channel handling) → `/fastapi-engineer` [TC-0.3]
+- [ ] `TASK-0.8` ⫘ Embeddings client (`:8002 /embed` custom contract) + vision (gemma4:e4b) + YOLO clients → `/fastapi-engineer` [TC-0.5]
 - [ ] `TASK-0.9` Stub `core/governors.py` reading `llm_call_log` for daily budget (enforcement deferred to Phase 6) → `/fastapi-engineer`
 - [ ] `TASK-0.10` ⫘ Structured JSON logging + correlation IDs + Sentry on the exception handler → `/observability-engineer`
 - [ ] `TASK-0.11` `GET /api/health` reporting all six dependencies → `/fastapi-engineer` [TC-0.1, TC-0.2]

@@ -17,8 +17,8 @@
 **Status:** ⬜
 
 ### TC-0.3: Router completes real calls on both providers
-**Steps:** Invoke router with role=`deliberation` (Groq) and role=`narrator` (Qwen) via a test harness/REPL.
-**Expected:** Both return non-empty content. Qwen call used `/no_think` and `content` is populated (not empty/reasoning-only). `llm_call_log` rows written with token counts + latency.
+**Steps:** Invoke router with role=`deliberation` (Groq `llama-3.3-70b-versatile`) and role=`narrator` (local `gemma4:e4b`) via a test harness/REPL. Also invoke the `qwen3.5-9b-128k` adapter directly.
+**Expected:** Both return non-empty content. gemma4 returns clean `content`. The qwen adapter correctly surfaces text despite empty `content` (reads the reasoning channel) — not a blank string. `llm_call_log` rows written with token counts + latency.
 **Status:** ⬜
 
 ### TC-0.4: Circuit breaker + failover
@@ -27,8 +27,8 @@
 **Status:** ⬜
 
 ### TC-0.5: Embeddings + vision live
-**Steps:** Embed a short string via TEI; describe a test image via Qwen vision; detect objects via YOLO.
-**Expected:** Embedding is a 1024-float vector. Vision returns a plausible caption. YOLO returns boxes/labels. All within timeout.
+**Steps:** Embed a short string via `:8002 /embed`; describe a test image via `gemma4:e4b` (multimodal); detect objects via YOLO `:8003`.
+**Expected:** Embedding is a 1024-float vector. Vision returns a plausible caption (verified: gemma4 identifies a solid-colour image correctly). YOLO returns boxes/labels. All within timeout.
 **Status:** ⬜
 
 ### TC-0.6: Secrets hygiene

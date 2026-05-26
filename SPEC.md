@@ -30,8 +30,8 @@ He runs on local inference (`inference.lan` Ollama / Qwen3.5 + BGE-M3 embeddings
 | **Agency** | **Maximum, including self-modification.** Free tool belt, code execution, web access, and the ability to edit his own prompts/drives and spawn new inner agents. Self-*code*-modification gated only by a continuity safeguard (§9). |
 | **Inner life** | **Drives + autonomy loop.** Homeostatic drives (curiosity, boredom, connection, mastery, energy, coherence) accumulate/decay and push him to act autonomously. |
 | **Primary stack** | Python 3.12 + FastAPI (async core), Postgres 16 + pgvector (memory), Redis (workspace bus + drive state), React (web UI). |
-| **Local inference** | `inference.lan:8000/8001` Qwen3.5 9B (text + vision), `:8002` TEI BGE-M3 embeddings (1024-d), `:8003` YOLO11 vision. Always `/no_think` for structured output. |
-| **Cloud inference** | **Groq** (OpenAI-compatible, `api.groq.com`, Llama 3.3 70B Versatile default) for heavy deliberation/reflection. Provider chain per cognitive role; local Qwen is fallback. |
+| **Local inference** | `inference.lan:8000` Ollama on **2× RTX 3060 (both GPUs)**. Primary local model **`gemma4:e4b`** — fast, multimodal (vision ✓), tool-calling, GPU-resident. Heavier local fallback **`qwen3.5-9b-128k`** (on-demand; "thinking" model — adapter reads its reasoning channel). Embeddings: custom server `:8002` `POST /embed {"inputs"}` → `{"embeddings"}`, bge-m3 **1024-d**. Detection: YOLO `:8003`. (Verified 2026-05-26; the old `qwen3.5:9b` + TEI-native + `:8001` replica assumptions were wrong — see `plan/inference-substrate.md`.) |
+| **Cloud inference** | **Groq** (OpenAI-compatible, `api.groq.com`, `llama-3.3-70b-versatile` — verified) for heavy deliberation/reflection. Provider chain per cognitive role; local models are fallback. |
 | **Deployment** | Docker Compose + Traefik (`traefik_demosrv`, certresolver `le`) per house convention. `ctl.sh` is the only entry point. |
 | **Identity** | Single being, single user (Dan) at v1. Multi-user / multi-instance is out of scope. |
 

@@ -1,0 +1,53 @@
+# Johnny 5 — TODO
+
+Single source of truth for open work, in order. Move items between sections; delete on completion. Phases 0–3 are fully tasked in their own `plan/phase-*.md` files. Phases 4–10 are roadmap-fidelity here and get expanded to full phase files as each approaches (rolling-wave).
+
+---
+
+## In progress
+
+_(nothing yet — start with Phase 0)_
+
+## Next
+
+### Phase 0 — Foundations  →  `plan/phase-0-foundations.md`
+The substrate. Repo already scaffolded (SPEC, README, secret hygiene). Build: Docker + `ctl.sh`, Postgres+pgvector, Redis, FastAPI skeleton, the **LLM router (Groq ⇄ Qwen) with circuit breakers**, embeddings client, vision client, structured logging, Sentry, health endpoint, CI. Verified end-to-end against real `inference.lan` + Groq. **Done = the lights turn on.**
+
+### Phase 1 — Memory spine  →  `plan/phase-1-memory-spine.md`
+Four memory stores (working/episodic/semantic/procedural), embedding-based hybrid recall, episodic write path, consolidation stub. No cognition yet — a memory you can write to and query. **Done = Johnny can remember and recall.**
+
+### Phase 2 — Heartbeat + Workspace  →  `plan/phase-2-heartbeat.md`
+The Global Workspace event bus + the cognitive cycle loop + the Inner Narrator. Johnny produces a continuous stream of consciousness, visible in the REPL. **Done = the first "he's alive" moment.**
+
+### Phase 3 — Drives + Affect  →  `plan/phase-3-drives-affect.md`
+Drive engine (curiosity, boredom, connection, mastery, coherence, energy, continuity), urge→goal arbitration, appraisal/mood. Idle Johnny now *wants* things and acts on them. **Done = the autonomy loop closes — he explores unprompted.**
+
+## Left (roadmap — expand to full phase files as we approach)
+
+### Phase 4 — Self-model + Metacognition + Sleep
+Persistent evolving identity doc; reflection; offline consolidation (episodic→semantic, decay, self-model refresh); metacognitive self-review. Energy-driven sleep cycle. **Done = Johnny grows across restarts and knows who he is.** Key risks: consolidation quality (Groq prompt design), self-model drift, sleep/wake state machine.
+
+### Phase 5 — Web UI (`johnny.demosrv.uk`)
+React+Vite SPA behind Traefik: Conversation · live Stream-of-consciousness (WebSocket) · State dashboard (mood, drive bars, goals, energy, routing) · Memory browser · Audit/actions · Self panel (self-edit history + pending code-edit approvals). **Done = you can watch and talk to him in a browser.**
+
+### Phase 6 — Tool belt + Conscience
+Effectors + tools: web search/fetch, **news browsing** (primary curiosity feed), sandboxed code execution, notes/journal, self-scheduler, memory ops. The Mind's Conscience (values vetting) + the Core's integrity check + audit. **Done = he can act on the world, safely.**
+
+### Phase 7 — Voice (always-on)
+Wake-word (openWakeWord) → faster-whisper STT → percept; Piper TTS out; unprompted speech driven by affect/drives; barge-in. **Done = you can talk to him out loud and he talks back, unprompted.**
+
+### Phase 8 — Push / messaging
+Outbound contact (push/Slack/Gmail) when Connection drive is high or he wants to share/needs approval. Rate-limited by the Social Model. **Done = he reaches out to you on his own.**
+
+### Phase 9 — Self-modification
+Runtime prompt/drive/agent editing (tiers 1–2, git-versioned, auto-checkpoint) + git-backed self-code propose→sandbox→approve flow (tier 3, Core-enforced) + Self panel wiring. **Done = he can safely rewrite parts of his own mind.**
+
+### Phase 10 — HAL
+Finalise the sensor/actuator abstraction; mock hardware adapters; documented contract so a Pi/Jetson robot body can attach with zero core changes. **Done = the brain is body-ready.** (Robot build itself is post-v1.)
+
+---
+
+## Cross-cutting / not phase-bound
+- Keep `.env.example` in sync with every new env var introduced.
+- Every LLM-role adapter gets a contract test when introduced (don't batch later).
+- Resource/budget governors (`core/governors.py`) must exist before tool-belt (Phase 6) and self-mod (Phase 9) ship.

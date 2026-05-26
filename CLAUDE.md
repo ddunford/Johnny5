@@ -42,6 +42,24 @@
 - **Continuity safeguards live in the Core** and cannot be disabled from the Mind: kill switch, append-only audit log, per-day token/$ budget, sandboxed code execution, scheduled memory/identity backups.
 - **Privacy:** Johnny's memory, identity, snapshots, and runtime config are gitignored — never pushed to the public repo.
 
+## Forward Commitments (cross-phase seams)
+
+Planning is rolling-wave (Phases 4–10 are roadmap-only until approached), so these are the architectural commitments **early-phase code must honour now** to avoid retrofitting later. Violating one means a painful refactor when the owning phase lands. If a Phase 0–3 task conflicts with one of these, stop and reconcile before coding.
+
+| # | Commitment | Why / owned by | Enforced from |
+|---|---|---|---|
+| FC-1 | **The Core is import-isolated and read-only to the Mind.** `core/` (supervisor, kill switch, audit writer, integrity gate, governors, identity anchor) must never be import-mutated by `brain/` or tools. Treat it as a separate trust boundary from day one — not a folder we'll "lock down later." | Core/Mind invariant (`SPEC.md §9.0`); owned by P9 self-mod but breaks instantly if the Mind can reach in | P0 |
+| FC-2 | **Every inner agent conforms to the `InnerAgent` protocol and is registered dynamically** (name, subscriptions, typed handle, prompt, model_route). No agent is hard-wired into the cycle by direct call. This is what makes runtime spawn/retire (P9) possible without rewriting the cycle. | Self-modification (P9) | P2 |
+| FC-3 | **Prompts, drive params, and the agent registry live in the git-backed config store, not in code constants.** Anything Johnny will later edit at runtime must be externalised from the start. Hardcoding a prompt now = it can't be self-edited later without a code change. | Self-mod tiers 1–2 (P9) | P2–P3 |
+| FC-4 | **All LLM access goes through `brain/llm/` router and is logged to `llm_call_log` with cost.** No agent calls a provider directly. The budget governor (P6) and "tired" degradation enforce against this log — bypassing it makes spend uncontrollable. | Tool-belt budget + degradation (P6) | P0 |
+| FC-5 | **Every action an Effector takes is routed through a single dispatch + audit point.** Even when Effectors are stubs (P2–P3), the dispatch seam must exist so the Conscience check (P6) and the Core audit log can wrap *all* actions — internal and external — uniformly. | Conscience + audit (P6) | P2 |
+| FC-6 | **Memory, identity, snapshots, and runtime config are snapshotable and gitignored.** Continuity (the drive *and* the safety backups) depends on this. Backups are scheduled in P4 but the snapshot/restore primitive ships in P1 — keep its format stable. | Sleep/backups (P4), Continuity drive (P3) | P1 |
+| FC-7 | **The cognitive cycle pipeline shape is fixed; later subsystems slot into named stages, they don't restructure the loop.** Stubbed stages (appraise/deliberate/check/act) are placeholders at known positions. P3/P6 fill them in place. | Drives/Affect (P3), Conscience/Effectors (P6) | P2 |
+| FC-8 | **State surfaces over WebSocket channels (`/ws/consciousness`, `/ws/state`) with stable payload schemas.** The web UI (P5) and voice (P7) are consumers, not the source of truth — the loop runs headless and surfaces emit regardless of whether anything is attached. | Web UI (P5), Voice (P7) | P2–P3 |
+| FC-9 | **No content filtering in the Core.** The Core protects continuity + host only; it never judges thought/goal content. Any values-based vetting lives in the Mind's Conscience (Johnny-editable). Don't smuggle policy into `core/`. | Agency posture (`SPEC.md §9`); Conscience (P6) | P0 |
+
+Keep this list current: when a phase is expanded or a seam is satisfied, update or strike the row.
+
 ## Modules in Use
 
 This project is ~90% custom build. Closest composition: **`realtime-ai`** (FastAPI variant). Module patterns referenced (not installed wholesale — most are Laravel impls, we build Python equivalents): `ai-llm` (router/circuit-breaker pattern), `audit-log` (Core audit), `notifications` (Phase 8 push). See `plan/module-decisions.md`. Excluded: `auth`, `billing`, `tenancy`, `settings` (single-user single-being — no need).

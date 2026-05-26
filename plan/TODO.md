@@ -34,7 +34,7 @@ React+Vite SPA behind Traefik: Conversation · live Stream-of-consciousness (Web
 Effectors + tools: web search/fetch, **news browsing** (primary curiosity feed), sandboxed code execution, notes/journal, self-scheduler, memory ops. The Mind's Conscience (values vetting) + the Core's integrity check + audit. **Done = he can act on the world, safely.**
 
 ### Phase 7 — Voice (always-on)
-Wake-word (openWakeWord) → faster-whisper STT → percept; Piper TTS out; unprompted speech driven by affect/drives; barge-in. **Done = you can talk to him out loud and he talks back, unprompted.**
+Wake-word (openWakeWord) → **Speaches STT** (`:8890`, `Systran/faster-whisper-small`) → percept; **Kokoro TTS** (`:8880`) → **Johnny robot-voice DSP** out (see `voice/` — PoC built); unprompted speech driven by affect/drives; barge-in. CPU TTS/STT latency is significant → stream/queue, never block the cycle. **Done = you can talk to him out loud and he talks back, unprompted, in his own voice.**
 
 ### Phase 8 — Push / messaging
 Outbound contact (push/Slack/Gmail) when Connection drive is high or he wants to share/needs approval. Rate-limited by the Social Model. **Done = he reaches out to you on his own.**

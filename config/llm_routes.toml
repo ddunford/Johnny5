@@ -31,8 +31,18 @@ affect = ["fast"]
 perception = ["fast"]
 vision = ["fast"]
 
-# Heavy reasoning — prefer Groq, fall back to local qwen when "tired".
-deliberation = ["cloud", "reasoning"]
+# Deliberation fires UNPROMPTED on the heartbeat in Phase 3 (the autonomy loop), so
+# it is LOCAL-FIRST: its 1–2 sentence internal reflections don't need a cloud 70b,
+# and local-first keeps the autonomous loop $0-marginal by default. The
+# BudgetGovernor exists but isn't yet a hard pre-call gate (Phase 6 wires it into
+# the router), so until then we must not let an idle Johnny rack up Groq spend on
+# his own. Cloud stays as a fallback for when local is down. (Revisit once the
+# governor gates cloud calls — then deliberation can safely return to cloud-first.)
+deliberation = ["reasoning", "cloud"]
+
+# Heavy reasoning, NOT yet autonomous — these are invoked deliberately (Phase 6+),
+# not on the idle heartbeat, so they can stay cloud-first (Groq preferred, local
+# qwen fallback) without an unbounded-autonomous-spend risk.
 metacognition = ["cloud", "reasoning"]
 self_model = ["cloud", "reasoning"]
 consolidation = ["cloud", "reasoning"]

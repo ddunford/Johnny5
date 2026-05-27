@@ -17,11 +17,12 @@ service-account*.json
 # ─── Johnny's living state (private, never public) ───
 # His memory, identity, and self-edits are personal and may contain
 # sensitive material gathered from the web / conversations.
-data/
-memory/
-snapshots/
-backups/
-config/runtime/          # live mutable prompts/agents Johnny rewrites at runtime
+# Root-anchored (leading /) so these never match test dirs like tests/memory/ or tests/data/.
+/data/
+/memory/
+/snapshots/
+/backups/
+/config/runtime/         # live mutable prompts/agents Johnny rewrites at runtime
 *.db
 *.sqlite
 *.sqlite3

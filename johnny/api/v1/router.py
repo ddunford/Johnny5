@@ -11,10 +11,19 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
+from johnny.api.v1 import audit, goals, memory, self_model, sleeps, state, thoughts
+from johnny.api.v1 import input as input_routes
 from johnny.api.v1.auth import require_token
 
 # The gate is applied at the router level, so it guards every mounted route with
-# no per-route opt-out. Sub-routers (input, state, thoughts, audit, memory, goals,
-# sleeps, self) are mounted in TASK-5a.7 once each route module + its runtime
-# wiring lands.
+# no per-route opt-out — the included sub-routers inherit it.
 v1_router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
+
+v1_router.include_router(input_routes.router)
+v1_router.include_router(state.router)
+v1_router.include_router(thoughts.router)
+v1_router.include_router(audit.router)
+v1_router.include_router(memory.router)
+v1_router.include_router(goals.router)
+v1_router.include_router(sleeps.router)
+v1_router.include_router(self_model.router)

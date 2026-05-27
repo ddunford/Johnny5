@@ -23,18 +23,22 @@ from brain.agents.attention import Attention
 from brain.agents.deliberation import Deliberation
 from brain.agents.memory_stages import EpisodicLearner, MemoryRecaller
 from brain.agents.narrator import Narrator
-from brain.agents.sensorium import Sensorium
+from brain.agents.sensorium import InputQueue, Sensorium
 from brain.cycle import CognitiveCycle
 from brain.cycle_control import CycleControlListener
 from brain.drives.engine import DriveEngine
+from brain.goals.store import GoalStore
 from brain.llm.router import LLMRouter, build_router
 from brain.memory.consolidator import Consolidator
 from brain.memory.decay import MemoryDecay
+from brain.memory.episodic import EpisodicMemory
 from brain.memory.semantic import SemanticMemory
 from brain.memory.snapshot import MemorySnapshot
 from brain.memory.working import WorkingMemory
 from brain.metacognition.agent import Metacognition
+from brain.metacognition.store import MetacognitionStore
 from brain.self_model.agent import SelfModel
+from brain.self_model.store import IdentityStore
 from brain.sleep import SleepCycle, WakeSelfCheck
 from brain.workspace import Workspace
 from foundation.config import Settings
@@ -56,6 +60,17 @@ class CognitiveRuntime:
         drives: DriveEngine,
         self_model: SelfModel,
         wake_check: WakeSelfCheck,
+        # The read/input surface the /api/v1 endpoints (Phase 5a) consume. The Mind
+        # runs headless (FC-8); these are the live instances the HTTP layer reads,
+        # wired here in the one composition root (no per-request construction).
+        input_queue: InputQueue,
+        affect: Affect,
+        goals: GoalStore,
+        sleep: SleepCycle,
+        episodic: EpisodicMemory,
+        semantic: SemanticMemory,
+        identity: IdentityStore,
+        metacognition: MetacognitionStore,
     ) -> None:
         self.workspace = workspace
         self.registry = registry
@@ -64,6 +79,14 @@ class CognitiveRuntime:
         self.drives = drives
         self.self_model = self_model
         self.wake_check = wake_check
+        self.input_queue = input_queue
+        self.affect = affect
+        self.goals = goals
+        self.sleep = sleep
+        self.episodic = episodic
+        self.semantic = semantic
+        self.identity = identity
+        self.metacognition = metacognition
         self._control = CycleControlListener(cycle)
         self._bus_task: asyncio.Task[None] | None = None
         self._cycle_task: asyncio.Task[None] | None = None
@@ -123,8 +146,11 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
 
     # Sensorium is both registered (society membership) and injected as the
     # PERCEIVE stage — the registry handles dynamic membership, the cycle drives
-    # the pipeline; both reference the one agent instance.
-    sensorium = Sensorium()
+    # the pipeline; both reference the one agent instance. The InputQueue is shared
+    # with the web API (POST /api/v1/input pushes onto the same Redis list Sensorium
+    # drains each tick), so a web message flows through the full cycle (FC-8).
+    input_queue = InputQueue()
+    sensorium = Sensorium(input_queue=input_queue)
     attention = Attention()
     registry.register(sensorium)
     registry.register(attention)
@@ -144,8 +170,10 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
     # Deliberation closes the autonomy loop (registered inner agent, FC-2/FC-3): it
     # arbitrates urges → a goal and acts on it with an INTERNAL action only
     # (reflect/recall/consolidate/formulate-question) — external tools are Phase 6.
-    # It owns the goal store + arbiter so the cycle's DELIBERATE/ACT stay thin.
-    deliberation = Deliberation(router)
+    # It shares the one GoalStore the web API reads (GET /api/v1/goals), so the
+    # goals panel reflects exactly what Deliberation is pursuing.
+    goal_store = GoalStore()
+    deliberation = Deliberation(router, store=goal_store)
     registry.register(deliberation)
 
     # Memory recall/learn are stage collaborators, not bus agents (no prompt to
@@ -194,6 +222,14 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
         workspace_capacity=settings.workspace_capacity,
     )
 
+    # The web API's read stores (Phase 5a). Stateless read facades over the same
+    # tables the cognition path writes — a fresh instance per concern, constructed
+    # once here in the composition root (not per HTTP request).
+    api_episodic = EpisodicMemory()
+    api_semantic = SemanticMemory()
+    api_identity = IdentityStore()
+    api_metacognition = MetacognitionStore()
+
     return CognitiveRuntime(
         workspace=workspace,
         registry=registry,
@@ -202,4 +238,12 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
         drives=drives,
         self_model=self_model,
         wake_check=wake_check,
+        input_queue=input_queue,
+        affect=affect,
+        goals=goal_store,
+        sleep=sleep_cycle,
+        episodic=api_episodic,
+        semantic=api_semantic,
+        identity=api_identity,
+        metacognition=api_metacognition,
     )

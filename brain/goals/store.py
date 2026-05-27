@@ -97,6 +97,17 @@ class GoalRepository(Repository[GoalRow]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def recent_closed(self, limit: int) -> list[GoalRow]:
+        """Recently resolved/abandoned goals, newest first (the goal-history view)."""
+        stmt = (
+            select(GoalRow)
+            .where(GoalRow.status != STATUS_ACTIVE)
+            .order_by(GoalRow.resolved_at.desc())
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
 
 # ── the store (the persistence boundary the arbiter + deliberation use) ────────
 
@@ -115,6 +126,12 @@ class GoalStore:
         """The current active goals (incumbent first)."""
         async with session_scope() as session:
             rows = await GoalRepository(session).active()
+        return [_row_to_goal(row) for row in rows]
+
+    async def recent_closed(self, limit: int = 20) -> list[Goal]:
+        """Recently resolved/abandoned goals, newest first (goal history for the UI)."""
+        async with session_scope() as session:
+            rows = await GoalRepository(session).recent_closed(limit)
         return [_row_to_goal(row) for row in rows]
 
     async def promote(self, goal: Goal) -> Goal:

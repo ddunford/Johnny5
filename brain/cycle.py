@@ -42,7 +42,7 @@ from brain.agents.deliberation import Action, ActionOutcome, DeliberationResult
 from brain.drives.engine import EVENT_INTERACTION, SLEEP_DRIVE, DriveEvent, DriveReading, Urge
 from brain.goals.store import Goal, goals_to_payload
 from brain.memory.working import WorkingMemory, WorkingMemoryItem
-from brain.sleep import CheckResult, SleepCycle, SleepReport
+from brain.sleep import CheckResult, SleepCycle, SleepLog, SleepReport
 from brain.workspace import Workspace, WorkspaceEvent, WorkspaceItem
 from foundation.observability import get_logger
 
@@ -475,14 +475,14 @@ class CognitiveCycle:
             WorkspaceEvent(
                 module="sleep",
                 type=STATE_EVENT,
-                payload={
-                    "tick": self._tick,
-                    "drives": [],
-                    "mood": None,
-                    "goals": [],
-                    "interval": round(self._next_interval, 3),
-                    "sleep": self._sleep_block(asleep=asleep),
-                },
+                payload=serialize_state(
+                    tick=self._tick,
+                    drives=[],
+                    mood=None,
+                    goals=[],
+                    interval=self._next_interval,
+                    sleep=self._sleep_block(asleep=asleep),
+                ),
             )
         )
 
@@ -653,7 +653,7 @@ class CognitiveCycle:
             ctx.mood = await self._affect.appraise_tick(
                 contents=ctx.percepts, drives=ctx.drives, events=ctx.events
             )
-            await self._emit(ctx, "affect", "mood", self._mood_payload(ctx.mood), stage="appraise")
+            await self._emit(ctx, "affect", "mood", serialize_mood(ctx.mood), stage="appraise")
 
         self._apply_affective_context(ctx)
         self._next_interval = self._modulate_interval(ctx.mood, ctx.drives)
@@ -704,23 +704,14 @@ class CognitiveCycle:
             ctx,
             "cycle",
             STATE_EVENT,
-            {
-                "tick": ctx.tick,
-                "drives": [
-                    {
-                        "drive": d.drive,
-                        "value": round(d.value, 4),
-                        "setpoint": round(d.setpoint, 4),
-                        "threshold": round(d.threshold, 4),
-                        "over_threshold": d.over_threshold,
-                    }
-                    for d in ctx.drives
-                ],
-                "mood": self._mood_payload(ctx.mood) if ctx.mood is not None else None,
-                "goals": goals_to_payload([ctx.goal]) if ctx.goal is not None else [],
-                "interval": round(self._next_interval, 3),
-                "sleep": self._sleep_block(asleep=False),
-            },
+            serialize_state(
+                tick=ctx.tick,
+                drives=ctx.drives,
+                mood=ctx.mood,
+                goals=[ctx.goal] if ctx.goal is not None else [],
+                interval=self._next_interval,
+                sleep=self._sleep_block(asleep=False),
+            ),
             stage="state",
         )
 
@@ -731,21 +722,11 @@ class CognitiveCycle:
         most recent completed sleep (or ``None`` before the first), so the dashboard
         and REPL can show "last sleep: consolidated N facts, self-model vN, ✓".
         """
-        return {
-            "asleep": asleep,
-            "full_agency": self._full_agency,
-            "last": _sleep_summary(self._last_sleep),
-        }
-
-    @staticmethod
-    def _mood_payload(mood: Mood) -> dict[str, object]:
-        return {
-            "valence": round(mood.valence, 4),
-            "arousal": round(mood.arousal, 4),
-            "emotions": {e: round(v, 4) for e, v in mood.emotions.items()},
-            "descriptor": mood.descriptor(),
-            "mood_id": mood.id,
-        }
+        return serialize_sleep_block(
+            asleep=asleep,
+            full_agency=self._full_agency,
+            last=sleep_summary_from_report(self._last_sleep),
+        )
 
     def _apply_affective_context(self, ctx: CycleContext) -> None:
         """Hand the tick's mood/drives to Attention, Recall, and the Narrator.
@@ -905,17 +886,126 @@ class CognitiveCycle:
             _log.warning("cycle.broadcast.failed", event_type=event_type, error=str(exc))
 
 
-def _sleep_summary(report: SleepReport | None) -> dict[str, object] | None:
-    """A compact, stable summary of the last sleep for the state surface (FC-8)."""
+# ── state-surface serializers (the SINGLE source of the /ws/state frame shape) ──
+#
+# These build the consolidated state payload. The cycle calls ``serialize_state``
+# from each tick's ``ctx`` (and from the awake↔asleep transitions); the
+# ``GET /api/v1/state`` endpoint calls the SAME function over current state read
+# off the repos. One projection ⇒ the live WS frame and the REST snapshot can't
+# drift (FC-8) — do not duplicate this shape anywhere.
+
+
+def serialize_drive(drive: DriveReading) -> dict[str, object]:
+    """One drive's compact state for the snapshot."""
+    return {
+        "drive": drive.drive,
+        "value": round(drive.value, 4),
+        "setpoint": round(drive.setpoint, 4),
+        "threshold": round(drive.threshold, 4),
+        "over_threshold": drive.over_threshold,
+    }
+
+
+def serialize_mood(mood: Mood) -> dict[str, object]:
+    """Johnny's mood as the state surface carries it (valence/arousal + tags)."""
+    return {
+        "valence": round(mood.valence, 4),
+        "arousal": round(mood.arousal, 4),
+        "emotions": {e: round(v, 4) for e, v in mood.emotions.items()},
+        "descriptor": mood.descriptor(),
+        "mood_id": mood.id,
+    }
+
+
+def serialize_sleep_block(
+    *, asleep: bool, full_agency: bool, last: dict[str, object] | None
+) -> dict[str, object]:
+    """The sleep block on every snapshot — awake/asleep, the agency gate, last sleep."""
+    return {"asleep": asleep, "full_agency": full_agency, "last": last}
+
+
+def serialize_state(
+    *,
+    tick: int,
+    drives: Sequence[DriveReading],
+    mood: Mood | None,
+    goals: Sequence[Goal],
+    interval: float,
+    sleep: dict[str, object],
+) -> dict[str, object]:
+    """Build the consolidated ``/ws/state`` frame / ``GET /api/v1/state`` payload.
+
+    ``mood`` is ``None`` until Johnny has appraised one (a fresh Mind serialises a
+    null mood); ``goals`` is whatever the caller passes (the tick's active goal for
+    the live frame, ``goals.active()`` for the REST snapshot); ``sleep`` is a
+    pre-built block (see ``serialize_sleep_block``).
+    """
+    return {
+        "tick": tick,
+        "drives": [serialize_drive(d) for d in drives],
+        "mood": serialize_mood(mood) if mood is not None else None,
+        "goals": goals_to_payload(list(goals)),
+        "interval": round(interval, 3),
+        "sleep": sleep,
+    }
+
+
+def _sleep_summary_fields(
+    *,
+    trigger: str,
+    ended_at: datetime | None,
+    facts_written: int,
+    episodes_decayed: int,
+    facts_merged: int,
+    self_model_version: int | None,
+    self_check_ok: bool | None,
+    degraded_stages: list[str],
+) -> dict[str, object]:
+    """The shared last-sleep summary shape (built identically from a report or a log)."""
+    return {
+        "trigger": trigger,
+        "ended_at": ended_at.isoformat() if ended_at else None,
+        "facts_written": facts_written,
+        "episodes_decayed": episodes_decayed,
+        "facts_merged": facts_merged,
+        "self_model_version": self_model_version,
+        "self_check_ok": self_check_ok,
+        "degraded_stages": degraded_stages,
+    }
+
+
+def sleep_summary_from_report(report: SleepReport | None) -> dict[str, object] | None:
+    """Last-sleep summary from the in-memory ``SleepReport`` (the live WS frame)."""
     if report is None:
         return None
-    return {
-        "trigger": report.trigger,
-        "ended_at": report.ended_at.isoformat() if report.ended_at else None,
-        "facts_written": report.facts_written,
-        "episodes_decayed": report.episodes_decayed,
-        "facts_merged": report.facts_merged,
-        "self_model_version": report.self_model_version,
-        "self_check_ok": report.self_check_ok,
-        "degraded_stages": report.degraded_stages,
-    }
+    return _sleep_summary_fields(
+        trigger=report.trigger,
+        ended_at=report.ended_at,
+        facts_written=report.facts_written,
+        episodes_decayed=report.episodes_decayed,
+        facts_merged=report.facts_merged,
+        self_model_version=report.self_model_version,
+        self_check_ok=report.self_check_ok,
+        degraded_stages=report.degraded_stages,
+    )
+
+
+def sleep_summary_from_log(log: SleepLog | None) -> dict[str, object] | None:
+    """Last-sleep summary from a persisted ``SleepLog`` row (the REST snapshot).
+
+    Produces the EXACT same shape as ``sleep_summary_from_report`` — the
+    ``degraded_stages`` list lives in ``notes['degraded']`` on the persisted row.
+    """
+    if log is None:
+        return None
+    degraded = log.notes.get("degraded", [])
+    return _sleep_summary_fields(
+        trigger=log.trigger,
+        ended_at=log.ended_at,
+        facts_written=log.facts_written,
+        episodes_decayed=log.episodes_decayed,
+        facts_merged=log.facts_merged,
+        self_model_version=log.self_model_version,
+        self_check_ok=log.self_check_ok,
+        degraded_stages=degraded if isinstance(degraded, list) else [],
+    )

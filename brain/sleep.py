@@ -252,6 +252,13 @@ class SleepLogRepository(Repository[SleepLogRow]):
         )
         return result.scalars().first()
 
+    async def recent(self, limit: int) -> list[SleepLogRow]:
+        """Recent sleeps, newest first (the sleep-history view)."""
+        result = await self.session.execute(
+            select(SleepLogRow).order_by(SleepLogRow.started_at.desc()).limit(limit)
+        )
+        return list(result.scalars().all())
+
 
 class SleepLogStore:
     """Open a sleep_log row on enter and close it on wake; read the latest."""
@@ -284,6 +291,11 @@ class SleepLogStore:
         async with session_scope() as session:
             row = await SleepLogRepository(session).latest()
         return _row_to_sleep_log(row) if row is not None else None
+
+    async def recent(self, limit: int = 20) -> list[SleepLog]:
+        async with session_scope() as session:
+            rows = await SleepLogRepository(session).recent(limit)
+        return [_row_to_sleep_log(row) for row in rows]
 
 
 # ── the sleep report ───────────────────────────────────────────────────────────
@@ -460,6 +472,10 @@ class SleepCycle:
     async def latest_sleep(self) -> SleepLog | None:
         """The most recent sleep_log row (for ``/ws/state`` + the REPL)."""
         return await self._log.latest()
+
+    async def recent_sleeps(self, limit: int = 20) -> list[SleepLog]:
+        """Recent sleep_log rows, newest first (the ``GET /api/v1/sleeps`` history)."""
+        return await self._log.recent(limit)
 
     # ── per-stage isolation ────────────────────────────────────────────────────
 

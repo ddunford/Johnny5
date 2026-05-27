@@ -14,8 +14,9 @@ This drives the real ``johnny.api.ws`` ``/ws/state`` handler through
 * the awake→asleep→awake transition is reflected live;
 * the ``WS_TOKEN`` gate rejects an unauthorised client before any state streams.
 
-The ``last`` summary is built with the production ``_sleep_summary`` projection so the
-test pins the real wire shape, not a hand-rolled echo. Cross-loop discipline mirrors
+The ``last`` summary is built with the production ``sleep_summary_from_report``
+projection so the test pins the real wire shape, not a hand-rolled echo. Cross-loop
+discipline mirrors
 ``test_consciousness_ws.py`` (lifespan builds the engine/Redis in the portal loop; a
 sync Redis client publishes from the test thread). DB+Redis backed → ``./ctl.sh test``.
 """
@@ -37,7 +38,7 @@ from fastapi.testclient import TestClient
 from helpers.db import dispose_global_engine, install_fresh_global_engine, truncate_tables
 from redis.asyncio import from_url as aio_from_url
 
-from brain.cycle import STATE_EVENT, _sleep_summary
+from brain.cycle import STATE_EVENT, sleep_summary_from_report
 from brain.sleep import SleepReport
 from brain.workspace import Workspace, WorkspaceEvent
 from foundation.config import get_settings
@@ -64,7 +65,11 @@ def _report(*, version: int) -> SleepReport:
 
 def _snapshot(*, asleep: bool, last_version: int | None) -> dict[str, Any]:
     """A state-snapshot payload with a sleep block, mirroring the cycle's emit."""
-    last = _sleep_summary(_report(version=last_version)) if last_version is not None else None
+    last = (
+        sleep_summary_from_report(_report(version=last_version))
+        if last_version is not None
+        else None
+    )
     return {
         "tick": 1,
         "drives": [],

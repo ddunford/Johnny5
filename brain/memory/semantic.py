@@ -127,6 +127,12 @@ class SemanticFactRepository(Repository[SemanticFactRow]):
         result = await self.session.execute(stmt)
         return [(row, float(dist)) for row, dist in result.all()]
 
+    async def recent(self, limit: int) -> list[SemanticFactRow]:
+        """The most recently asserted/updated facts first (the browse path — no query)."""
+        stmt = select(SemanticFactRow).order_by(SemanticFactRow.updated_at.desc()).limit(limit)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
 
 class SemanticEdgeRepository(Repository[SemanticEdgeRow]):
     """Session-scoped persistence + traversal for ``semantic_edge`` rows."""
@@ -197,6 +203,14 @@ class SemanticMemory:
             result = await session.execute(stmt)
             row = result.scalar_one()
             return _row_to_fact(row)
+
+    async def recent(self, limit: int = 20) -> list[SemanticFact]:
+        """The most recently asserted facts, newest first (browse path — ``score`` None)."""
+        if limit <= 0:
+            return []
+        async with session_scope() as session:
+            rows = await SemanticFactRepository(session).recent(limit)
+        return [_row_to_fact(row) for row in rows]
 
     async def recall(self, query: str, k: int = 5) -> list[SemanticFact]:
         """Recall the ``k`` facts most similar to ``query`` (cosine), ``score`` set."""

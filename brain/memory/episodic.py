@@ -155,6 +155,18 @@ class EpisodicMemory:
             )
             return _row_to_episode(row)
 
+    async def recent(self, limit: int = 20) -> list[Episode]:
+        """The most recent episodes, newest first (the browse path — no query).
+
+        ``score`` is ``None`` (browsing isn't ranked by relevance); the search
+        path (``recall``) is what populates it.
+        """
+        if limit <= 0:
+            return []
+        async with session_scope() as session:
+            rows = await EpisodeRepository(session).recent(limit)
+        return [_row_to_episode(row) for row in rows]
+
     async def recall(
         self,
         query: str,

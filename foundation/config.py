@@ -289,6 +289,15 @@ class Settings(BaseSettings):
     public_domain: str = Field(default="johnny.demosrv.uk")
     web_port: int = Field(default=80)
 
+    # ── Web API (the /api/v1 read/input doorway, Phase 5a) ──
+    # Max characters one /api/v1/input message may carry — a longer body is rejected
+    # (413) so the percept queue / episodic memory can't be flooded with a giant blob.
+    web_input_max_chars: int = Field(default=4000)
+    # Back-pressure on /api/v1/input: when the shared Sensorium InputQueue already
+    # holds this many undrained inputs, further sends are rejected (429) so a runaway
+    # client/loop can't grow the Redis list unboundedly faster than the cycle drains it.
+    web_input_max_queue_depth: int = Field(default=100)
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def sqlalchemy_url(self) -> str:

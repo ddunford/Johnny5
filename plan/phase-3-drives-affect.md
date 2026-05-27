@@ -55,8 +55,9 @@ This is what makes Johnny *want* — the difference between a continuously-narra
 - [ ] `TASK-3.8` Tests: idle accumulation crosses threshold → goal spawned with no input; satisfying a drive lowers it → `/qa-test-engineer` [TC-3.1, TC-3.2, TC-3.3]
 - [ ] `TASK-3.9` ⫘ Tests: mood modulates cycle rate + biases attention; arbitration doesn't oscillate → `/qa-test-engineer` [TC-3.4, TC-3.6]
 - [ ] `TASK-3.10` ⫘ Persistence test: drives/mood/goals survive restart; in-flight goal resumes → `/qa-test-engineer` [TC-3.5]
-- [ ] `TASK-3.11` ⫘ Affect/appraisal contract test (model output → MoodDelta projection) → `/qa-test-engineer`
-- [ ] `TASK-3.12` ⫘ Security review: no runaway resource use from cycle-rate escalation; goal/action loop can't spin unbounded → `/security-reviewer`
+- [x] `TASK-3.11` ⫘ Affect/appraisal contract test (model output → MoodDelta projection) → `/qa-test-engineer`
+- [x] `TASK-3.12` ⫘ Security review: no runaway resource use from cycle-rate escalation; goal/action loop can't spin unbounded → `/security-reviewer`
+  - Verdict: **PASS — found + fixed one MEDIUM.** Resource bounds hold: cycle rate hard-clamped [1.5s,12s] (`_modulate_interval`), 1s error-backoff (no hot-spin), Deliberation acts ≤1/`deliberation_min_interval_seconds` (20s) and resolves the goal same-tick (goal→action→LLM loop can't spin), Affect LLM fires only on a fresh interaction (idle is free), single active goal (no accumulation), `/ws/state` gated identically to `/ws/consciousness` (constant-time token, reject-before-stream, token never logged), no secrets in drive/mood/goal/action payloads, no eval/exec/shell. **MEDIUM (fixed):** `deliberation` routed Groq-first and now fires unprompted, but the `BudgetGovernor` is never consulted before a call — the $5/day cap can't halt an autonomous paid loop. Fixed by routing deliberation local-first (`["reasoning","cloud"]`). Carry-over → Phase 6: wire `BudgetGovernor` into the router as a hard pre-call gate.
 
 ## Notes
 - Autonomy here is **internal** (reflect/recall/consolidate). Reaching out to the world (web, news, messaging) is Phase 6/8 — do not pull those forward; this phase proves the *motivation* mechanism in isolation.

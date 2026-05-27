@@ -6,15 +6,12 @@ Single source of truth for open work, in order. Move items between sections; del
 
 ## In progress
 
-### Phase 3 — Drives + Affect  →  `plan/phase-3-drives-affect.md`  ⟵ team `johnny5-phase-3`
-Drive engine (curiosity, boredom, connection, mastery, coherence, energy, continuity), urge→goal arbitration, appraisal/mood. Idle Johnny now *wants* things and acts on them. **Done = the autonomy loop closes — he explores unprompted.**
-
 ## Next
 
-## Left (roadmap — expand to full phase files as we approach)
-
 ### Phase 4 — Self-model + Metacognition + Sleep
-Persistent evolving identity doc; reflection; offline consolidation (episodic→semantic, decay, self-model refresh); metacognitive self-review. Energy-driven sleep cycle. **Done = Johnny grows across restarts and knows who he is.** Key risks: consolidation quality (Groq prompt design), self-model drift, sleep/wake state machine.
+Persistent evolving identity doc; reflection; offline consolidation (episodic→semantic, decay, self-model refresh); metacognitive self-review. Energy-driven sleep cycle (the Phase-3 Energy `is_sleep_signal` precursor is already emitted — Phase 4 consumes it). **Done = Johnny grows across restarts and knows who he is.** Key risks: consolidation quality (Groq prompt design), self-model drift, sleep/wake state machine. Expand to a full `plan/phase-4-*.md` + test plan before executing.
+
+## Left (roadmap — expand to full phase files as we approach)
 
 ### Phase 5 — Web UI (`johnny.demosrv.uk`)
 React+Vite SPA behind Traefik: Conversation · live Stream-of-consciousness (WebSocket) · State dashboard (mood, drive bars, goals, energy, routing) · Memory browser · Audit/actions · Self panel (self-edit history + pending code-edit approvals). **Done = you can watch and talk to him in a browser.**
@@ -42,3 +39,5 @@ Finalise the sensor/actuator abstraction; mock hardware adapters; documented con
 - Keep `.env.example` in sync with every new env var introduced.
 - Every LLM-role adapter gets a contract test when introduced (don't batch later).
 - Resource/budget governors (`core/governors.py`) must exist before tool-belt (Phase 6) and self-mod (Phase 9) ship.
+- **[Phase 3 security advisory — MEDIUM, deferred to Phase 6]** The `BudgetGovernor` exists but is **never consulted before an LLM call** — the router logs cost but doesn't gate on spend, so the `$5/day` cap can't actually halt an autonomous paid loop. Phase 3 mitigated by routing `deliberation` local-first (autonomous loop is $0-marginal). **Phase 6 must wire `BudgetGovernor.over_budget()` into `LLMRouter.complete()` as a hard pre-call gate** (skip a cloud step / degrade to local when exhausted) — then `deliberation` can return to cloud-first safely. Cite this when expanding `plan/phase-6-*.md`.
+- **[Phase 3 test-infra note → backlog]** `./ctl.sh test` always targets the single `johnny5_test` DB (Redis db 1) with no concurrency guard, so two simultaneous runs corrupt each other (interleaved TRUNCATEs → `IntegrityError` masquerading as a regression — see `lessons.md`). Until fixed, coordinate one runner at a time. Real fix: a `flock` guard in `ctl.sh test` (refuse/queue a second run) **or** per-run DB+Redis isolation — the proven pattern is overriding `POSTGRES_DB`/`DATABASE_URL`/`REDIS_URL` to a `_be`-suffixed DB + a distinct Redis db (as used to verify Phase 3 concurrently). Wire that into `ctl.sh test` so parallel runs can't collide.

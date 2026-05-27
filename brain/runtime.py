@@ -20,6 +20,7 @@ import contextlib
 from brain.agents import AgentRegistry
 from brain.agents.attention import Attention
 from brain.agents.memory_stages import EpisodicLearner, MemoryRecaller
+from brain.agents.narrator import Narrator
 from brain.agents.sensorium import Sensorium
 from brain.cycle import CognitiveCycle
 from brain.llm.router import LLMRouter, build_router
@@ -92,6 +93,11 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
     registry.register(sensorium)
     registry.register(attention)
 
+    # The Narrator thinks via the router (FC-4); it's a registered, prompt-backed
+    # inner agent (Johnny can edit its voice, FC-3).
+    narrator = Narrator(router)
+    registry.register(narrator)
+
     # Memory recall/learn are stage collaborators, not bus agents (no prompt to
     # edit) — they bridge the cycle to the Phase-1 memory spine.
     recaller = MemoryRecaller()
@@ -102,6 +108,7 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
         perception=sensorium,
         attention=attention,
         recall=recaller,
+        narration=narrator,
         learning=learner,
         working_memory=working_memory,
         interval_seconds=settings.cycle_base_interval_seconds,

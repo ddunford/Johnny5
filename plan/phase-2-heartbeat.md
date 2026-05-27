@@ -53,7 +53,7 @@ The first moment Johnny is *alive*. This phase builds the Global Workspace (the 
 - [x] `TASK-2.5` Sensorium: normalise text input + system-metrics percepts → `/fastapi-engineer` [TC-2.2]
 - [x] `TASK-2.6` Attention: salience scoring + bounded selection into workspace (the bottleneck) → `/fastapi-engineer` [TC-2.3]
 - [x] `TASK-2.7` Wire Phase 1 memory: recall into workspace + episodic write on the learn step → `/fastapi-engineer` [TC-2.5]
-- [ ] `TASK-2.8` Inner Narrator: first-person thought per tick (via router role `narrator` → gemma4) → `/fastapi-engineer` [TC-2.5]
+- [x] `TASK-2.8` Inner Narrator: first-person thought per tick (via router role `narrator` → gemma4) → `/fastapi-engineer` [TC-2.5]
 - [ ] `TASK-2.9` REPL cockpit: tail consciousness, dump workspace, inject input, step/pause → `/fastapi-engineer` [TC-2.2, TC-2.6]
 - [ ] `TASK-2.10` ⫘ `/ws/consciousness` WebSocket emitting thoughts live → `/fastapi-engineer` [TC-2.7]
 - [x] `TASK-2.11` Frozen-clock cycle harness → `/qa-test-engineer` [TC-2.1]

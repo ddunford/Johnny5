@@ -1,0 +1,82 @@
+name: CI
+
+# Lint (ruff), type-check (mypy), and test (pytest) on every PR and on pushes
+# to main. Tests run against a dedicated johnny5_test database in a postgres
+# service container — never a dev database.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push to a branch cancels the previous, still-running CI for that branch.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint · Type · Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: johnny5_test
+          POSTGRES_USER: johnny5
+          POSTGRES_PASSWORD: johnny5_test_pw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U johnny5 -d johnny5_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      APP_ENV: testing
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: johnny5_test
+      POSTGRES_USER: johnny5
+      POSTGRES_PASSWORD: johnny5_test_pw
+      DATABASE_URL: postgresql+asyncpg://johnny5:johnny5_test_pw@localhost:5432/johnny5_test
+      REDIS_URL: redis://localhost:6379/1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv (with cache)
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Format check (ruff)
+        run: uv run ruff format --check .
+
+      - name: Type-check (mypy)
+        run: uv run mypy foundation core brain johnny
+
+      - name: Apply migrations
+        run: uv run alembic upgrade head
+
+      - name: Test (pytest)
+        run: uv run pytest

@@ -1,0 +1,24 @@
+# Johnny 5 — PRODUCTION overrides.
+#
+# Selected explicitly by the control script in prod mode:
+#   docker compose -f docker-compose.yml -f docker-compose.production.yml ...
+# Passing files explicitly also means docker-compose.override.yml is NOT loaded,
+# so none of the dev source mounts or --reload leak into production.
+#
+# The base file is already production-shaped (runtime image, plain uvicorn,
+# restart policy, healthcheck). This file pins the production posture: the app
+# environment flips to `production` (disables /docs and the OpenAPI schema).
+
+services:
+  api:
+    build:
+      target: runtime
+    environment:
+      APP_ENV: production
+    restart: unless-stopped
+
+  postgres:
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped

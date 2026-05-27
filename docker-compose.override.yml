@@ -1,0 +1,18 @@
+# Johnny 5 — DEV overrides (auto-loaded by `docker compose` when no explicit
+# -f set is passed). NOT loaded in production, which selects files explicitly.
+#
+# Builds the `development` image (dev tools + --reload) and mounts live source
+# over /app. The anonymous `/app/.venv` volume masks the host's local .venv so
+# the container keeps the env that was built into the image.
+
+services:
+  api:
+    build:
+      target: development
+    image: johnny5-api:dev
+    command: ["uvicorn", "johnny.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      APP_ENV: development
+    volumes:
+      - .:/app
+      - /app/.venv

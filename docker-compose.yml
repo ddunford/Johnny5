@@ -1,0 +1,87 @@
+# Johnny 5 — base compose.
+#
+# Production-shaped defaults. Dev conveniences (live source mount, --reload,
+# dev image) live in docker-compose.override.yml, which Compose auto-loads ONLY
+# when no explicit -f set is given. The control script (./ctl.sh) drives both:
+#   dev :  docker compose ...                              (base + override)
+#   prod:  docker compose -f docker-compose.yml -f docker-compose.production.yml ...
+#
+# Services: api (FastAPI), postgres (pgvector), redis. Inference lives off-box
+# on inference.lan and is reached over the host's LAN DNS — no service here.
+
+name: johnny5
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: johnny5-api:latest
+    env_file: .env
+    command: ["uvicorn", "johnny.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - internal
+      - edge
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: "${TRAEFIK_NETWORK:-traefik_demosrv}"
+      traefik.http.routers.johnny5-api.rule: "Host(`${PUBLIC_DOMAIN:-johnny.demosrv.uk}`)"
+      traefik.http.routers.johnny5-api.entrypoints: "websecure"
+      traefik.http.routers.johnny5-api.tls.certresolver: "${TRAEFIK_CERTRESOLVER:-le}"
+      traefik.http.routers.johnny5-api.service: "johnny5-api"
+      traefik.http.services.johnny5-api.loadbalancer.server.port: "8000"
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-johnny5}"
+      POSTGRES_USER: "${POSTGRES_USER:-johnny5}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}"
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-johnny5} -d ${POSTGRES_DB:-johnny5}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ./redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - internal
+
+networks:
+  # Private app/datastore network — not exposed to Traefik.
+  internal:
+    driver: bridge
+  # Shared Traefik network (external, created outside this project).
+  edge:
+    external: true
+    name: "${TRAEFIK_NETWORK:-traefik_demosrv}"

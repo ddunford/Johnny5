@@ -1,0 +1,80 @@
+# ─── Secrets & environment ─── NEVER bake into an image ───
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials*
+*-credentials*
+*_secret*
+service-account*.json
+.envrc
+
+# ─── Johnny's living state (private; never in an image) ───
+data/
+memory/
+snapshots/
+backups/
+config/runtime/
+*.db
+*.sqlite
+*.sqlite3
+pgdata/
+redisdata/
+
+# ─── VCS / project meta ───
+.git/
+.github/
+.githooks/
+.gitignore
+.dockerignore
+
+# ─── Python caches / build artifacts ───
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# ─── Node / web build (image build handles its own deps) ───
+node_modules/
+web/dist/
+web/build/
+.vite/
+*.local
+
+# ─── Voice / models / large artifacts ───
+*.wav
+*.mp3
+*.onnx
+models/
+.artifacts/
+test-results/
+playwright-report/
+
+# ─── Docs / planning (not needed at runtime) ───
+plan/
+SPEC.md
+README.md
+LICENSE
+lessons.md
+
+# ─── Editor / OS ───
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.log

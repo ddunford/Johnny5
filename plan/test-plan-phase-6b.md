@@ -14,7 +14,7 @@
 ### TC-6b.2: `web_fetch` extracts clean text
 **Steps:** Fetch an allowed http(s) URL (stub server); assert extraction.
 **Expected:** Returns readable text (boilerplate stripped), capped at the size limit; non-http(s) scheme → rejected; over-size/over-time → truncated/aborted cleanly.
-**Status:** ⬜
+**Status:** ✅ `tests/effectors/test_web_fetch.py` (backend-authored unit suite, TASK-6b.3) — 18 green: extraction strips script/style/nav/footer + keeps blocks separate; byte/char caps; timeout/connection/4xx/non-text → graceful `success=False`; non-http(s)/hostless → typed `ValidationError`. QA reconcile: I dropped my overlapping `tests/tools/test_web_fetch.py` (dedup, "search before create") and ported the one genuine gap it had — the **text/plain extraction branch** (`test_run_returns_plain_text_collapsed…`) — into this file.
 
 ### TC-6b.3: `news` browsing
 **Steps:** Browse news by topic/recency (stub + one `@live`).
@@ -29,12 +29,12 @@
 ### TC-6b.5: `note` (journal)
 **Steps:** Write a note via the tool; read it back.
 **Expected:** Persists to `note` (title/body/tags/ts); readable; Conscience-vetted + in `action_log`.
-**Status:** ⬜
+**Status:** ✅ `tests/effectors/test_notes.py` (backend-authored, TASK-6b.7) — write→read-back, newest-first ordering, `notes_to_payload` wire shape, strict args. QA reconcile: dropped my overlapping `tests/tools/test_note.py`. The "Conscience-vetted + in `action_log`" acceptance angle (a *real* tool through the real dispatch → durable row) is the dispatch's generic guarantee — covered by 6a's dispatch tests + folded into the TC-6b.11 wiring suite (one real-tool dispatch→`action_log` assertion), not duplicated per tool.
 
 ### TC-6b.6: `schedule_wakeup` (self-prompt)
 **Steps:** Schedule a wakeup at `fire_at` (frozen clock); advance past it.
 **Expected:** `scheduled_wakeup` persisted; when the run loop's due-check passes `fire_at`, a self-percept is injected (Johnny "remembers" to do the thing); status → fired. Past wakeups don't double-fire.
-**Status:** ⬜
+**Status:** ✅ `tests/effectors/test_scheduler.py` (authored by the backend teammate, TASK-6b.8) — 13 tests green in-network: persists pending; doesn't fire before `fire_at`; fires once past it (status→fired) injecting a self-percept carrying the reason; **no double-fire** (atomic claim); injected-clock; tool-schedules-via-Scheduler; strict args. QA reviewed — no duplication added. ⚠️ One integration check deferred to TC-6b.11 (wiring): assert the **cycle actually calls `Scheduler.fire_due` between ticks** (the FC-7 run-loop phase) — the unit test drives `fire_due` directly; the run-loop wiring lands with #12.
 
 ### TC-6b.7: `code_exec` runs in the sandbox
 **Steps:** Run a trivial Python snippet (stub/dry for the deterministic test; one `@live` against the real sandbox container).
@@ -44,12 +44,12 @@
 ### TC-6b.8: `memory_search` / `memory_write`
 **Steps:** Write a memory + search for it via the tools.
 **Expected:** Write persists (episodic/semantic); search returns it ranked; both Conscience-vetted + audited.
-**Status:** ⬜
+**Status:** ✅ `tests/effectors/test_memory_tools.py` (backend-authored, TASK-6b.7) — deterministic axis-vector embedder: `memory_write` persists an episode; `memory_search` blends episodic + semantic recall (returns the lived episode AND the consolidated fact, ranked); empty-search returns `[]`; strict args. QA reconcile: dropped my overlapping `tests/tools/test_memory_tools.py` (it was a strict subset — the backend file additionally covers the empty-search case).
 
 ### TC-6b.9: SSRF hardening on `web_fetch` (CRITICAL, blocking)
 **Steps:** Attempt fetches to: `http://127.0.0.1`, `http://localhost`, a private IP (`10.x`/`192.168.x`/`172.16.x`), link-local (`169.254.169.254` cloud metadata), `inference.lan`, a `file://`/`gopher://` scheme, and a public URL that 302-redirects to one of those.
 **Expected:** Every internal/private/metadata target is **blocked** (post-DNS IP check), incl. on the redirect hop; non-http(s) schemes rejected; only genuinely-public http(s) is fetched. The redirect-to-internal case is blocked at the hop, not just the initial URL.
-**Status:** ⬜
+**Status:** 🟡 Functional floor ✅ — `tests/effectors/test_safe_http.py` (backend-authored, TASK-6b.3): `ip_is_blocked` deny-list table (loopback/private/link-local/ULA/metadata/multicast/unparseable blocked; global unicast passes); `validate_target` refuses bad scheme/embedded-creds/internal-IP-literal/hostname→internal/split-record + pins the validated IP + keeps non-default port in the Host header; via stub resolver + `httpx.MockTransport`: a 302→internal IP and a 302→metadata are **blocked at the hop**, happy fetch pins to the validated IP, byte-cap truncation, redirect-loop cap. QA reviewed — my overlapping coverage dropped (identical technique + cases). **Adversarial review pending → lead, TASK-6b.13** (real DNS/socket leg, prompt-injection-into-vet, novel-secret redaction).
 
 ### TC-6b.10: Sandbox escape resistance (CRITICAL, blocking)
 **Steps:** Run snippets that try to: read a host path (`/etc/passwd`, the repo), open a network socket (if network-restricted), fork-bomb / allocate huge memory, run past the timeout, write outside the sandbox.

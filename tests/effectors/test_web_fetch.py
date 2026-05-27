@@ -192,3 +192,21 @@ async def test_run_rejects_non_text_content() -> None:
     )
     assert result.success is False
     assert result.output["error"] == "non_text"
+
+
+async def test_run_returns_plain_text_collapsed_without_html_parsing() -> None:
+    # text/plain takes the non-HTML branch: no title, body collapsed (runs of blank
+    # lines → one, trailing space trimmed) — distinct from the readability extractor.
+    outcome = FetchOutcome(
+        final_url="https://example.com/raw.txt",
+        status_code=200,
+        content_type="text/plain; charset=utf-8",
+        body=b"line one\n\n\n   line two   ",
+        truncated=False,
+    )
+    result = await _tool(fetcher=_FakeFetcher(outcome=outcome)).run(
+        WebFetchArgs(url="https://example.com/raw.txt")
+    )
+    assert result.success is True
+    assert result.output["title"] == ""
+    assert result.output["text"] == "line one\n\nline two"

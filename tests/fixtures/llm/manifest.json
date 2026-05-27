@@ -32,6 +32,12 @@
       "model": "bge-m3",
       "request_body": "{\"inputs\":\"Johnny 5 is alive.\"}",
       "demonstrates": "Custom Flask embeddings contract (NOT TEI native). Response {embeddings:[[...1024 floats...]], num_texts, time_ms}. 1024-d."
+    },
+    "yolo_bus_detections.json": {
+      "source": "POST http://inference.lan:8003/detect/base64",
+      "model": "YOLO11",
+      "request_body": "{\"image\":\"<base64 of ultralytics bus.jpg>\"}",
+      "demonstrates": "YOLO detection contract. Response {detections:[{class,confidence,bbox:{x1,y1,x2,y2}}], count, image_size}. 5 dets on bus.jpg (bus + persons). Detector projects server 'class' -> Detection.label."
     }
   }
 }

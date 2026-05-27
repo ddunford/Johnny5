@@ -1,16 +1,16 @@
-"""Contract tests for the Groq + Ollama provider adapters.
+"""Contract tests for the Groq + Ollama provider projection.
 
 House rule: every adapter that parses a model response has a contract test that
 feeds it a LITERAL captured envelope and asserts the projection, so a model
 output-shape change can't silently break cognition.
 
-The projection under test is ``OpenAICompatibleProvider._parse`` (inherited by
-both ``GroqProvider`` and ``OllamaProvider``). Fixtures under
-``tests/fixtures/llm/`` are real responses captured live from inference.lan /
-Groq (provenance in ``manifest.json``). The two derived cases — empty ``content``
-and the ``reasoning_content`` alias — start from a real envelope and mutate one
-field to exercise the adapter's documented thinking-model safeguards; they are
-labelled as such and never invent a wire shape from scratch.
+The projection under test is the pure ``parse_chat_completion`` function (shared
+by GroqProvider and OllamaProvider via OpenAICompatibleProvider). Being I/O-free,
+it takes captured fixtures directly. Fixtures under ``tests/fixtures/llm/`` are
+real responses captured live from inference.lan / Groq (provenance in
+``manifest.json``). The two derived cases — empty ``content`` and the
+``reasoning_content`` alias — start from a real envelope and mutate one field to
+exercise the documented thinking-model safeguards.
 
 Transport-level error mapping (HTTP ≥400 → ProviderError, timeout →
 ProviderTimeoutError) is covered with httpx's built-in MockTransport, since the
@@ -19,7 +19,7 @@ router's circuit breaker keys off exactly those exceptions.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from copy import deepcopy
 from typing import Any, NoReturn
 
@@ -32,10 +32,12 @@ from brain.llm.base import (
     ProviderError,
     ProviderTimeoutError,
 )
-from brain.llm.providers.groq import GROQ_PROVIDER_NAME, GroqProvider
-from brain.llm.providers.ollama import OLLAMA_PROVIDER_NAME, OllamaProvider
-from brain.llm.providers.openai_compatible import OpenAICompatibleProvider
-from foundation.config import Settings
+from brain.llm.providers.groq import GROQ_PROVIDER_NAME
+from brain.llm.providers.ollama import OLLAMA_PROVIDER_NAME
+from brain.llm.providers.openai_compatible import (
+    OpenAICompatibleProvider,
+    parse_chat_completion,
+)
 
 pytestmark = pytest.mark.contract
 
@@ -47,34 +49,16 @@ QWEN = "llm/ollama_qwen35_thinking_completion.json"
 QWEN_TERSE = "llm/ollama_qwen35_thinking_completion_terse.json"
 
 
-@pytest.fixture
-def groq_provider() -> Iterator[GroqProvider]:
-    provider = GroqProvider(Settings())
-    yield provider
-    import asyncio
-
-    asyncio.run(provider.aclose())
-
-
-@pytest.fixture
-def ollama_provider() -> Iterator[OllamaProvider]:
-    provider = OllamaProvider(Settings())
-    yield provider
-    import asyncio
-
-    asyncio.run(provider.aclose())
-
-
 # --------------------------------------------------------------------------- #
 # Groq projection (cloud)                                                      #
 # --------------------------------------------------------------------------- #
 
 
-def test_groq_projection_clean_content(
-    groq_provider: GroqProvider, load_fixture: FixtureLoader
-) -> None:
+def test_groq_projection_clean_content(load_fixture: FixtureLoader) -> None:
     env = load_fixture(GROQ)
-    c = groq_provider._parse(env, requested_model="llama-3.3-70b-versatile")
+    c = parse_chat_completion(
+        env, provider=GROQ_PROVIDER_NAME, requested_model="llama-3.3-70b-versatile"
+    )
     assert isinstance(c, Completion)
     assert c.content == "ALIVE"
     assert c.reasoning is None
@@ -85,14 +69,14 @@ def test_groq_projection_clean_content(
     assert c.finish_reason == "stop"
 
 
-def test_groq_ignores_extra_keys_and_preserves_raw(
-    groq_provider: GroqProvider, load_fixture: FixtureLoader
-) -> None:
+def test_groq_ignores_extra_keys_and_preserves_raw(load_fixture: FixtureLoader) -> None:
     """Groq adds usage_breakdown / x_groq / service_tier — the parser must not
     choke on them, and the full envelope is preserved on ``raw``."""
     env = load_fixture(GROQ)
     assert {"x_groq", "service_tier", "usage_breakdown"} <= set(env)  # guard the fixture
-    c = groq_provider._parse(env, requested_model="llama-3.3-70b-versatile")
+    c = parse_chat_completion(
+        env, provider=GROQ_PROVIDER_NAME, requested_model="llama-3.3-70b-versatile"
+    )
     assert c.raw == env
     assert "x_groq" in c.raw
 
@@ -102,11 +86,9 @@ def test_groq_ignores_extra_keys_and_preserves_raw(
 # --------------------------------------------------------------------------- #
 
 
-def test_ollama_gemma4_projection_clean_content(
-    ollama_provider: OllamaProvider, load_fixture: FixtureLoader
-) -> None:
+def test_ollama_gemma4_projection_clean_content(load_fixture: FixtureLoader) -> None:
     env = load_fixture(GEMMA4)
-    c = ollama_provider._parse(env, requested_model="gemma4:e4b")
+    c = parse_chat_completion(env, provider=OLLAMA_PROVIDER_NAME, requested_model="gemma4:e4b")
     assert c.content == "ALIVE"
     assert c.reasoning is None
     assert c.provider == OLLAMA_PROVIDER_NAME
@@ -129,7 +111,6 @@ def test_ollama_gemma4_projection_clean_content(
     ],
 )
 def test_ollama_qwen_projects_answer_not_reasoning(
-    ollama_provider: OllamaProvider,
     load_fixture: FixtureLoader,
     fixture: str,
     expected_content: str,
@@ -138,7 +119,9 @@ def test_ollama_qwen_projects_answer_not_reasoning(
 ) -> None:
     """content is the clean ANSWER; the chain-of-thought stays in reasoning."""
     env = load_fixture(fixture)
-    c = ollama_provider._parse(env, requested_model="qwen3.5-9b-128k:latest")
+    c = parse_chat_completion(
+        env, provider=OLLAMA_PROVIDER_NAME, requested_model="qwen3.5-9b-128k:latest"
+    )
     assert c.content == expected_content
     assert c.reasoning is not None and c.reasoning.strip()
     # The answer must not be the scratch-work.
@@ -149,39 +132,39 @@ def test_ollama_qwen_projects_answer_not_reasoning(
     assert c.completion_tokens == completion_toks
 
 
-def test_ollama_qwen_reasoning_carries_the_trace(
-    ollama_provider: OllamaProvider, load_fixture: FixtureLoader
-) -> None:
-    c = ollama_provider._parse(load_fixture(QWEN), requested_model="qwen3.5-9b-128k:latest")
+def test_ollama_qwen_reasoning_carries_the_trace(load_fixture: FixtureLoader) -> None:
+    c = parse_chat_completion(
+        load_fixture(QWEN), provider=OLLAMA_PROVIDER_NAME, requested_model="qwen3.5-9b-128k:latest"
+    )
     assert c.reasoning is not None
     assert "Thinking Process" in c.reasoning
     assert len(c.reasoning) > len(c.content) * 5
 
 
-def test_ollama_empty_content_falls_back_to_reasoning(
-    ollama_provider: OllamaProvider, load_fixture: FixtureLoader
-) -> None:
+def test_ollama_empty_content_falls_back_to_reasoning(load_fixture: FixtureLoader) -> None:
     """Documented thinking-model safeguard: a real qwen envelope whose answer
     channel came back blank must surface the reasoning, never an empty string."""
     env = deepcopy(load_fixture(QWEN_TERSE))
     reasoning_text = env["choices"][0]["message"]["reasoning"]
     env["choices"][0]["message"]["content"] = ""  # provider returned a blank answer
-    c = ollama_provider._parse(env, requested_model="qwen3.5-9b-128k:latest")
+    c = parse_chat_completion(
+        env, provider=OLLAMA_PROVIDER_NAME, requested_model="qwen3.5-9b-128k:latest"
+    )
     assert c.content == reasoning_text
     assert c.content.strip()
     assert c.reasoning == reasoning_text
 
 
-def test_ollama_accepts_reasoning_content_alias(
-    ollama_provider: OllamaProvider, load_fixture: FixtureLoader
-) -> None:
+def test_ollama_accepts_reasoning_content_alias(load_fixture: FixtureLoader) -> None:
     """Some OpenAI-compatible servers name the channel ``reasoning_content``;
-    the adapter accepts either spelling."""
+    the parser accepts either spelling."""
     env = deepcopy(load_fixture(QWEN_TERSE))
     msg = env["choices"][0]["message"]
     msg["reasoning_content"] = msg.pop("reasoning")
     msg["content"] = ""
-    c = ollama_provider._parse(env, requested_model="qwen3.5-9b-128k:latest")
+    c = parse_chat_completion(
+        env, provider=OLLAMA_PROVIDER_NAME, requested_model="qwen3.5-9b-128k:latest"
+    )
     assert c.reasoning == msg["reasoning_content"]
     assert c.content == c.reasoning  # fell back via the alias
 
@@ -191,24 +174,22 @@ def test_ollama_accepts_reasoning_content_alias(
 # --------------------------------------------------------------------------- #
 
 
-def test_model_defaults_to_requested_when_absent(
-    ollama_provider: OllamaProvider, load_fixture: FixtureLoader
-) -> None:
+def test_model_defaults_to_requested_when_absent(load_fixture: FixtureLoader) -> None:
     env = deepcopy(load_fixture(GEMMA4))
     del env["model"]
-    c = ollama_provider._parse(env, requested_model="gemma4:e4b")
+    c = parse_chat_completion(env, provider=OLLAMA_PROVIDER_NAME, requested_model="gemma4:e4b")
     assert c.model == "gemma4:e4b"
 
 
-def test_empty_choices_raises_provider_error(ollama_provider: OllamaProvider) -> None:
+def test_empty_choices_raises_provider_error() -> None:
     with pytest.raises(ProviderError) as exc_info:
-        ollama_provider._parse({"choices": []}, requested_model="gemma4:e4b")
+        parse_chat_completion({"choices": []}, provider=OLLAMA_PROVIDER_NAME, requested_model="m")
     assert exc_info.value.provider == OLLAMA_PROVIDER_NAME
 
 
-def test_missing_choices_key_raises_provider_error(groq_provider: GroqProvider) -> None:
+def test_missing_choices_key_raises_provider_error() -> None:
     with pytest.raises(ProviderError) as exc_info:
-        groq_provider._parse({}, requested_model="llama-3.3-70b-versatile")
+        parse_chat_completion({}, provider=GROQ_PROVIDER_NAME, requested_model="m")
     assert exc_info.value.provider == GROQ_PROVIDER_NAME
 
 

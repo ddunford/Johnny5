@@ -115,6 +115,18 @@ class Settings(BaseSettings):
     attention_weight_novelty: float = Field(default=0.6)
     attention_repeat_penalty: float = Field(default=0.5)
 
+    # ── Memory wiring into the cycle (recall + learn stages) ──
+    # How many episodes / facts recall pulls into the workspace each tick.
+    memory_recall_episodes_k: int = Field(default=3)
+    memory_recall_facts_k: int = Field(default=3)
+    # Recalled memory is salient enough to surface but capped *below* a fresh
+    # message — recall informs the present, it doesn't crowd it out.
+    memory_recall_salience_ceiling: float = Field(default=0.7)
+    # An interaction is always written to episodic memory; an idle stream-of-
+    # consciousness tick is written only every N ticks (so memory grows from
+    # what's notable, not from every 4s of "nothing happened").
+    memory_learn_idle_every_ticks: int = Field(default=30)
+
     # ── Interfaces ──
     public_domain: str = Field(default="johnny.demosrv.uk")
     web_port: int = Field(default=80)

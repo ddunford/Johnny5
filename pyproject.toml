@@ -61,5 +61,13 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Pin async fixtures to a per-function event loop (matching the function-scoped
+# test loop). The DB-backed suites install a per-test, loop-local NullPool engine
+# into the process-global `foundation.db` handle (tests/helpers/db.py); leaving
+# the fixture loop scope unset let pytest-asyncio run an async fixture in a
+# different loop than its test, so the global engine intermittently bound to the
+# wrong loop and a rotating subset of DB tests failed under the full suite while
+# passing in isolation. "function" keeps fixture + test on one loop.
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 pythonpath = ["."]

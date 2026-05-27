@@ -34,6 +34,27 @@ class Detection(BaseModel):
     bbox: BoundingBox
 
 
+def parse_detections(data: dict[str, object]) -> list[Detection]:
+    """Project a ``/detect`` envelope into a list of ``Detection``.
+
+    Pure (no I/O) so contract tests can feed a captured fixture through it. Maps
+    the server's ``class`` field to ``label``.
+    """
+    detections = data.get("detections") or []
+    if not isinstance(detections, list):
+        raise ProviderError(
+            "YOLO server returned a non-list 'detections'", provider=DETECTOR_PROVIDER_NAME
+        )
+    return [
+        Detection(
+            label=item["class"],
+            confidence=item["confidence"],
+            bbox=BoundingBox(**item["bbox"]),
+        )
+        for item in detections
+    ]
+
+
 class Detector:
     def __init__(self, settings: Settings) -> None:
         self._client = httpx.AsyncClient(

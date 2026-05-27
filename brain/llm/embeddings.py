@@ -19,6 +19,31 @@ EMBEDDINGS_PROVIDER_NAME = "embeddings"
 _DEFAULT_TIMEOUT = 30.0
 
 
+def parse_embeddings(
+    data: dict[str, object], *, expected: int, dimensions: int
+) -> list[list[float]]:
+    """Project an ``/embed`` envelope into a list of vectors.
+
+    Pure (no I/O) so contract tests can feed a captured fixture through it.
+    Enforces the vector count and dimensionality.
+    """
+    vectors = data.get("embeddings")
+    if not isinstance(vectors, list) or len(vectors) != expected:
+        raise ProviderError(
+            f"embeddings server returned {len(vectors) if isinstance(vectors, list) else 'no'} "
+            f"vectors for {expected} inputs",
+            provider=EMBEDDINGS_PROVIDER_NAME,
+        )
+    for vector in vectors:
+        if not isinstance(vector, list) or len(vector) != dimensions:
+            raise ProviderError(
+                f"expected {dimensions}-d embeddings, got "
+                f"{len(vector) if isinstance(vector, list) else type(vector).__name__}",
+                provider=EMBEDDINGS_PROVIDER_NAME,
+            )
+    return [[float(x) for x in vector] for vector in vectors]
+
+
 class Embedder:
     def __init__(self, settings: Settings) -> None:
         self._endpoint = settings.embed_endpoint
@@ -59,21 +84,9 @@ class Embedder:
         return (await self.embed([text]))[0]
 
     def _parse(self, data: dict[str, object], *, expected: int) -> list[list[float]]:
-        vectors = data.get("embeddings")
-        if not isinstance(vectors, list) or len(vectors) != expected:
-            raise ProviderError(
-                f"embeddings server returned {len(vectors) if isinstance(vectors, list) else 'no'} "
-                f"vectors for {expected} inputs",
-                provider=EMBEDDINGS_PROVIDER_NAME,
-            )
-        for vector in vectors:
-            if not isinstance(vector, list) or len(vector) != self._dimensions:
-                raise ProviderError(
-                    f"expected {self._dimensions}-d embeddings, got "
-                    f"{len(vector) if isinstance(vector, list) else type(vector).__name__}",
-                    provider=EMBEDDINGS_PROVIDER_NAME,
-                )
-        return [[float(x) for x in vector] for vector in vectors]
+        """Project an ``/embed`` envelope into vectors (delegates to the pure
+        ``parse_embeddings``; the single parse path for prod + contract tests)."""
+        return parse_embeddings(data, expected=expected, dimensions=self._dimensions)
 
     async def aclose(self) -> None:
         await self._client.aclose()

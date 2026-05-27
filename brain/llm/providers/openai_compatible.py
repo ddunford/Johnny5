@@ -16,6 +16,40 @@ import httpx
 from brain.llm.base import Completion, Message, ProviderError, ProviderTimeoutError
 
 
+def parse_chat_completion(
+    data: dict[str, Any], *, provider: str, requested_model: str
+) -> Completion:
+    """Project an OpenAI-shaped chat-completion envelope into a ``Completion``.
+
+    Pure (no I/O) so contract tests can feed captured fixtures straight through
+    it. Handles the thinking-model case: ``content`` is the answer; a separate
+    ``message.reasoning`` channel is kept distinct, and only used as the answer
+    if ``content`` came back blank (defensive guard).
+    """
+    choices = data.get("choices") or []
+    if not choices:
+        raise ProviderError(f"{provider} returned no choices", provider=provider)
+
+    choice = choices[0]
+    message = choice.get("message") or {}
+    content = message.get("content") or ""
+    # Different servers name the thinking channel differently.
+    reasoning = message.get("reasoning") or message.get("reasoning_content")
+    effective_content = content if content.strip() else (reasoning or "")
+
+    usage = data.get("usage") or {}
+    return Completion(
+        content=effective_content,
+        reasoning=reasoning,
+        provider=provider,
+        model=data.get("model") or requested_model,
+        prompt_tokens=int(usage.get("prompt_tokens") or 0),
+        completion_tokens=int(usage.get("completion_tokens") or 0),
+        finish_reason=choice.get("finish_reason"),
+        raw=data,
+    )
+
+
 class OpenAICompatibleProvider:
     """A provider that talks the OpenAI chat-completions wire format.
 
@@ -80,32 +114,10 @@ class OpenAICompatibleProvider:
         return self._parse(resp.json(), requested_model=model)
 
     def _parse(self, data: dict[str, Any], *, requested_model: str) -> Completion:
-        choices = data.get("choices") or []
-        if not choices:
-            raise ProviderError(f"{self.name} returned no choices", provider=self.name)
-
-        choice = choices[0]
-        message = choice.get("message") or {}
-        content = message.get("content") or ""
-        # Different servers name the thinking channel differently.
-        reasoning = message.get("reasoning") or message.get("reasoning_content")
-
-        # Thinking-model safeguard: if the answer channel came back empty but the
-        # model produced reasoning, surface the reasoning so the call isn't
-        # silently blank (the failure mode the substrate notes warn about).
-        effective_content = content if content.strip() else (reasoning or "")
-
-        usage = data.get("usage") or {}
-        return Completion(
-            content=effective_content,
-            reasoning=reasoning,
-            provider=self.name,
-            model=data.get("model") or requested_model,
-            prompt_tokens=int(usage.get("prompt_tokens") or 0),
-            completion_tokens=int(usage.get("completion_tokens") or 0),
-            finish_reason=choice.get("finish_reason"),
-            raw=data,
-        )
+        """Project a response envelope into a ``Completion`` (delegates to the
+        pure ``parse_chat_completion``; kept as an instance method so it carries
+        the provider name and is the single parse path for prod + contract tests)."""
+        return parse_chat_completion(data, provider=self.name, requested_model=requested_model)
 
     async def aclose(self) -> None:
         await self._client.aclose()

@@ -6,11 +6,13 @@ history, then persists a **new** append-versioned ``identity`` row (latest =
 current). The truncation set is therefore ``identity`` plus the memory + drive/mood
 tables a refresh reads (``helpers.phase4.SELF_MODEL_TABLES``).
 
-⚠ ``identity`` is seeded v1 from the Core anchor by the migration; ``RESTART
-IDENTITY CASCADE`` wipes that seed. A versioning assertion (TC-4.4: refresh →
-``version = previous + 1``) must re-establish the v1 baseline after truncation —
-the exact seam (backend identity bootstrap vs. test-seeded row) is a HOLD item
-until the SelfModel store API is confirmed. Mirrors the ``drives_db`` pattern.
+``identity`` is seeded v1 from the Core anchor by migration 0005; ``RESTART IDENTITY
+CASCADE`` wipes that seed. The store re-establishes it idempotently:
+``IdentityStore.ensure_seeded()`` (and ``SelfModel.bootstrap()`` / ``current()`` /
+``refresh()``, which all call it) re-seed the anchor-grounded v1 if the table is
+empty — the ``DriveEngine.bootstrap`` pattern. So a test needs no manual re-seed:
+the first ``current()``/``refresh()`` self-seeds v1, then ``refresh()`` appends v2.
+Mirrors the ``drives_db`` pattern.
 """
 
 from __future__ import annotations

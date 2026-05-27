@@ -11,10 +11,10 @@ so "advance time → expire" is exact, not wall-clock dependent.
 from __future__ import annotations
 
 import pytest
+from helpers.clock import FrozenClock
 from redis.asyncio import Redis
 
 from brain.memory.working import WorkingMemory, WorkingMemoryItem
-from helpers.clock import FrozenClock
 
 
 def _item(content: str, salience: float, *, kind: str = "note") -> WorkingMemoryItem:

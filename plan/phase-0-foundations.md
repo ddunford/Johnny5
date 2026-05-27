@@ -57,7 +57,7 @@ The substrate Johnny runs on. No cognition yet — this phase makes "the lights 
 - [x] `TASK-0.7` ⫘ Groq + Ollama provider adapters (OpenAI-compatible; gemma4 clean `content`; qwen3.5-9b reasoning-channel handling) → `/fastapi-engineer` [TC-0.3]
 - [x] `TASK-0.8` ⫘ Embeddings client (`:8002 /embed` custom contract) + vision (gemma4:e4b) + YOLO clients → `/fastapi-engineer` [TC-0.5]
 - [x] `TASK-0.9` Stub `core/governors.py` reading `llm_call_log` for daily budget (enforcement deferred to Phase 6) → `/fastapi-engineer`
-- [ ] `TASK-0.10` ⫘ Structured JSON logging + correlation IDs + Sentry on the exception handler → `/observability-engineer`
+- [x] `TASK-0.10` ⫘ Structured JSON logging + correlation IDs + Sentry on the exception handler → `/observability-engineer`
 - [ ] `TASK-0.11` `GET /api/health` reporting all six dependencies → `/fastapi-engineer` [TC-0.1, TC-0.2]
 - [x] `TASK-0.12` ⫘ CI workflow: ruff + mypy + pytest on PR → `/devops-deployment-engineer` [TC-0.7]
 - [x] `TASK-0.13` Contract tests for Groq + Qwen adapters (response-envelope fixtures → projection) → `/qa-test-engineer` [TC-0.3]

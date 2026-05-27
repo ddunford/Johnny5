@@ -13,12 +13,12 @@
 
 ### TC-5a.2: `POST /api/v1/input` enqueues a percept (the talk-to-him path)
 **Steps:** POST a message; inspect the `InputQueue` (`johnny:sensorium:inputs`) depth; run one Sensorium tick.
-**Expected:** Response `{accepted:true, queue_depth>=1}`; the message is on the same Redis queue the REPL uses; the next tick drains it into a `percept` (kind=input) → it flows through appraise/recall/narrate (does NOT bypass the cycle). Blank/oversized input → 422/413, not enqueued.
+**Expected:** Response `{accepted:true, queue_depth>=1}`; the message is on the same Redis queue the REPL uses; the next tick drains it into a `percept` (kind=input) → it flows through appraise/recall/narrate (does NOT bypass the cycle). Blank/oversized input → 422/413, not enqueued. **Queue-depth cap:** when the queue already holds ≥ the bound, POST returns `429` and does not enqueue (a runaway client can't grow the Redis list unboundedly).
 **Status:** ⬜
 
 ### TC-5a.3: `GET /api/v1/state` matches the `/ws/state` payload shape
 **Steps:** Read `/api/v1/state`; compare to a `/ws/state` frame.
-**Expected:** Identical shape (drives[], mood, goals[], interval, sleep{asleep,full_agency,last}) — because both call the one extracted projection. A fresh Johnny (no mood/goals) returns the empty-state shape without nulls-as-crashes.
+**Expected:** Identical shape (drives[], mood, goals[], interval, sleep{asleep,full_agency,last}) — because both serialize via the one extracted function (WS from the tick `ctx`, REST from current state read off the repos). A fresh Johnny (no mood/goals) returns the empty-state shape without nulls-as-crashes. A byte/shape comparison of the REST snapshot vs a captured WS frame confirms no drift.
 **Status:** ⬜
 
 ### TC-5a.4: Thoughts + audit endpoints project the bus log

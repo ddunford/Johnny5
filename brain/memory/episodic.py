@@ -10,8 +10,8 @@ near. See ``EpisodicMemory`` (added with the write/recall path).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from datetime import UTC, datetime
+from collections.abc import Callable, Sequence
+from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
 from pydantic import BaseModel, Field
@@ -25,8 +25,10 @@ from brain.memory.base import (
     RecallWeights,
     blended_score,
     clamp01,
+    default_embedder,
     recency_score,
     similarity_from_distance,
+    utcnow,
 )
 from foundation.config import get_settings
 from foundation.db import Base, Repository, session_scope
@@ -113,27 +115,31 @@ class EpisodicMemory:
     """Write + hybrid-recall over episodic memory.
 
     Embeds exclusively through the injected ``EmbeddingClient`` (FC-4: never
-    inline). Recall blends similarity, recency, and salience — pure cosine would
-    surface topically-near but stale/trivial memories, which is the failure mode
-    ``SPEC §8`` calls out.
+    inline) — defaults to the production BGE-M3 embedder, tests inject a
+    deterministic one. Recall blends similarity, recency, and salience — pure
+    cosine would surface topically-near but stale/trivial memories, the failure
+    mode ``SPEC §8`` calls out. "now" comes from the injected ``now_fn`` (never a
+    bare ``datetime.now()``) so the recency ranking is freezable in tests.
     """
 
     def __init__(
         self,
-        embedder: EmbeddingClient,
+        embedder: EmbeddingClient | None = None,
         *,
         weights: RecallWeights | None = None,
         candidate_pool: int | None = None,
+        now_fn: Callable[[], datetime] = utcnow,
     ) -> None:
         settings = get_settings()
-        self._embedder = embedder
+        self._embedder = embedder if embedder is not None else default_embedder()
         self._weights = weights or RecallWeights.from_settings(settings)
         self._candidate_pool = candidate_pool or settings.memory_recall_candidate_pool
+        self._now_fn = now_fn
 
     async def write(self, episode: Episode) -> Episode:
         """Persist an episode (embedding its content) and return it with id + ts."""
         vector = await self._embedder.embed_one(episode.content)
-        ts = episode.ts or datetime.now(UTC)
+        ts = episode.ts or self._now_fn()
         async with session_scope() as session:
             repo = EpisodeRepository(session)
             row = await repo.add(
@@ -154,11 +160,13 @@ class EpisodicMemory:
 
         Pulls a similarity-ordered candidate pool from the ANN index, then
         re-ranks each candidate by ``w_sim·sim + w_rec·recency + w_sal·salience``
-        and returns the top ``k`` with their blended ``score`` populated.
+        and returns the top ``k`` with their blended ``score`` populated. Anything
+        past rank ``k`` is excluded; ``k <= 0`` returns an empty list. ``now``
+        overrides the injected clock for this call (tests freeze recency here).
         """
         if k <= 0:
             return []
-        reference = now or datetime.now(UTC)
+        reference = now if now is not None else self._now_fn()
         query_vector = await self._embedder.embed_one(query)
         pool = max(self._candidate_pool, k)
         async with session_scope() as session:

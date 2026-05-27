@@ -21,7 +21,12 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Mapped, mapped_column
 
 from brain.memory import EMBED_DIM
-from brain.memory.base import EmbeddingClient, clamp01, similarity_from_distance
+from brain.memory.base import (
+    EmbeddingClient,
+    clamp01,
+    default_embedder,
+    similarity_from_distance,
+)
 from foundation.db import Base, Repository, session_scope
 
 SEMANTIC_FACT_TABLE = "semantic_fact"
@@ -151,8 +156,8 @@ class SemanticMemory:
     Embedding is always via the injected ``EmbeddingClient`` (FC-4).
     """
 
-    def __init__(self, embedder: EmbeddingClient) -> None:
-        self._embedder = embedder
+    def __init__(self, embedder: EmbeddingClient | None = None) -> None:
+        self._embedder = embedder if embedder is not None else default_embedder()
 
     async def upsert_fact(
         self,

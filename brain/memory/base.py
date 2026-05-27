@@ -13,10 +13,10 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
-from foundation.config import Settings
+from foundation.config import Settings, get_settings
 
 
 @runtime_checkable
@@ -26,6 +26,21 @@ class EmbeddingClient(Protocol):
     async def embed(self, texts: Sequence[str]) -> list[list[float]]: ...
 
     async def embed_one(self, text: str) -> list[float]: ...
+
+
+def default_embedder() -> EmbeddingClient:
+    """The production embedder (TEI BGE-M3 on ``:8002``) the stores use when none
+    is injected. Tests inject a deterministic ``EmbeddingClient`` instead, so
+    recall ranking is reproducible. Imported lazily to avoid pulling the LLM
+    layer into modules that only need the protocol."""
+    from brain.llm.embeddings import Embedder
+
+    return Embedder(get_settings())
+
+
+def utcnow() -> datetime:
+    """Default wall clock for recency. Injected (``now_fn``) so tests can freeze it."""
+    return datetime.now(UTC)
 
 
 @dataclass(frozen=True)

@@ -1,0 +1,206 @@
+/* Design tokens + base layout for the Johnny 5 viewer.
+   A calm, dark "monitor" aesthetic — you are watching a being, not using an app. */
+
+:root {
+  --bg: #0c0e14;
+  --bg-panel: #141823;
+  --bg-elevated: #1b2030;
+  --border: #262c3b;
+  --text: #e6e9f0;
+  --text-dim: #9aa3b8;
+  --text-faint: #6b7488;
+  --accent: #6ea8fe;
+  --accent-dim: #3a5a9a;
+  --good: #5fd08a;
+  --warn: #f0c674;
+  --danger: #f08a8a;
+  --over: #f0a76b;
+
+  --radius: 8px;
+  --gap: 16px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  --mono: "SFMono-Regular", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* ── Shell ───────────────────────────────────────────────── */
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.shell__header {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 12px 20px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  flex-wrap: wrap;
+}
+
+.shell__brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  margin-right: 8px;
+}
+
+.shell__brand-name {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.shell__brand-sub {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.shell__nav {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.shell__nav-link {
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.shell__nav-link:hover {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.shell__nav-link--active {
+  background: var(--accent-dim);
+  color: var(--text);
+}
+
+.shell__actions {
+  margin-left: auto;
+}
+
+.shell__main {
+  flex: 1;
+  padding: 20px;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ── Panels ──────────────────────────────────────────────── */
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.panel__heading {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.panel__placeholder {
+  color: var(--text-faint);
+}
+
+.panel__empty {
+  color: var(--text-faint);
+  font-style: italic;
+  padding: 24px 0;
+}
+
+/* ── Error fallbacks ─────────────────────────────────────── */
+.panel-error {
+  background: var(--bg-panel);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.panel-error__title {
+  margin: 0 0 8px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.panel-error__detail {
+  margin: 0 0 12px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.panel-error__retry,
+.global-error__reload {
+  background: var(--accent-dim);
+  color: var(--text);
+  border: none;
+  border-radius: var(--radius);
+  padding: 8px 16px;
+}
+
+.global-error {
+  max-width: 480px;
+  margin: 80px auto;
+  text-align: center;
+  padding: 0 20px;
+}
+
+.global-error__title {
+  color: var(--danger);
+}
+
+.global-error__detail {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.global-error__hint {
+  color: var(--text-faint);
+}

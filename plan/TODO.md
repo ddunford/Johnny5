@@ -6,10 +6,10 @@ Single source of truth for open work, in order. Move items between sections; del
 
 ## In progress
 
-## Next
+### Phase 5b — Web UI (`johnny.demosrv.uk`)  →  `plan/phase-5b-web-ui.md`  ⟵ team `johnny5-phase-5b`
+React 19 + Vite + TS SPA behind Traefik (new `web` nginx service, path-routed): Conversation, live Consciousness stream, State dashboard (drives/mood/goals/energy + awake-asleep/⚠DEGRADED/self-model-version/last-sleep), Memory browser, Audit, read-only Self panel. Service-layer **contract tests fed 5a's captured wire fixtures** + a mandatory **fresh-load smoke** against a real backend (`/plan-review` 7b/7c). Token gate driven from the UI. (Self-edit *approval* UI is Phase 9 — labelled placeholder only.) 17 tasks (frontend + devops + qa + lead-security). **Done = you can watch and talk to him in a browser.**
 
-### Phase 5b — Web UI (`johnny.demosrv.uk`)  →  `plan/phase-5b-web-ui.md` (tasked, ready — 5a done)
-React 19 + Vite + TS SPA behind Traefik (new `web` nginx service, path-routed): Conversation, live Consciousness stream, State dashboard (drives/mood/goals/energy + awake-asleep/⚠DEGRADED/self-model-version/last-sleep), Memory browser, Audit, read-only Self panel. Service-layer **contract tests fed 5a's captured wire fixtures** + a mandatory **fresh-load smoke** against a real backend (`/plan-review` 7b/7c). Token gate driven from the UI. (Self-edit *approval* UI is Phase 9 — labelled placeholder only.) Run `/plan-review phase 5b` then `/team-execute` after 5a lands.
+## Next
 - **Phase 5b — Web UI** → `plan/phase-5b-web-ui.md` (frontend + devops + qa, 15 tasks). React 19 + Vite + TS SPA behind Traefik (new `web` nginx service, path-routed): Conversation, live Consciousness stream, State dashboard (drives/mood/goals/energy + awake-asleep/⚠DEGRADED/self-model-version/last-sleep), Memory browser, Audit, read-only Self panel. Service-layer **contract tests fed 5a's captured wire fixtures** + a mandatory **fresh-load smoke** against a real backend (`/plan-review` 7b/7c). Token gate driven from the UI. (Self-edit *approval* UI is Phase 9 — labelled placeholder only.)
 
 **Done = you can watch and talk to him in a browser.** Run `/plan-review` then `/team-execute` (5a, then 5b).

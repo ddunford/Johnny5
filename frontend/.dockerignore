@@ -1,0 +1,19 @@
+# Web UI build context — keep it lean and reproducible.
+# Deps come from the lockfile via `npm ci`; the bundle is built in-image.
+node_modules
+dist
+.vite
+coverage
+test-results
+playwright-report
+
+# Local env / editor / VCS noise
+*.local
+.env
+.env.*
+.git
+.gitignore
+.DS_Store
+
+# The image builds its own; no need to ship the Dockerfile into the context.
+Dockerfile

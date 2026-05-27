@@ -6,8 +6,7 @@ Single source of truth for open work, in order. Move items between sections; del
 
 ## In progress
 
-### Phase 0 — Foundations  →  `plan/phase-0-foundations.md`  ⟵ team `johnny5-phase-0`
-The substrate. Build: Docker + `ctl.sh`, Postgres+pgvector, Redis, FastAPI skeleton, the **LLM router (Groq ⇄ gemma4/qwen) with circuit breakers**, embeddings client (`/embed`), vision (gemma4), structured logging, Sentry, health endpoint, CI. Verified end-to-end against real `inference.lan` + Groq (substrate already proven — see `plan/inference-substrate.md`). **Done = the lights turn on.**
+_(none — Phase 0 complete 2026-05-27; Phase 1 is next)_
 
 ## Next
 

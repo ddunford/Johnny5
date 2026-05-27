@@ -36,9 +36,7 @@ class LlmCallLog(Base):
     completion_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     latency_ms: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
-    cost_usd: Mapped[Decimal] = mapped_column(
-        Numeric(12, 6), nullable=False, default=Decimal("0")
-    )
+    cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, default=Decimal("0"))
 
     # The budget governor sums cost over a time window; the provider breakdown
     # supports per-provider spend views and circuit diagnostics.

@@ -1,0 +1,41 @@
+# LLM routing policy — per-role provider chains (versioned defaults).
+#
+# This is config, not code (FC-3): the routing policy is something Johnny may
+# re-tune at runtime later, so it lives here, not in constants. The Phase 9
+# git-backed runtime store can override this file by pointing LLM_ROUTES_PATH at
+# a runtime copy.
+#
+# `[models.<slot>]` binds a logical slot to a provider + the settings attribute
+# that holds its concrete model id, so model tags stay single-sourced in .env.
+# `[roles]` maps each cognitive role to an ordered list of slots: the router
+# tries them in order, skipping any whose provider circuit is open, until one
+# succeeds. First = preferred, the rest = fallback ("tired" degradation).
+
+[models.fast]
+provider = "ollama"
+model_setting = "local_fast_model"        # gemma4:e4b — GPU-resident workhorse, clean content
+
+[models.reasoning]
+provider = "ollama"
+model_setting = "local_reasoning_model"   # qwen3.5-9b-128k — heavier, on-demand, thinking model
+
+[models.cloud]
+provider = "groq"
+model_setting = "groq_model"              # llama-3.3-70b-versatile — heavy reasoning, budget-capped
+
+[roles]
+# Fast / frequent cognition + percepts — local gemma4 only.
+narrator = ["fast"]
+attention = ["fast"]
+affect = ["fast"]
+perception = ["fast"]
+vision = ["fast"]
+
+# Heavy reasoning — prefer Groq, fall back to local qwen when "tired".
+deliberation = ["cloud", "reasoning"]
+metacognition = ["cloud", "reasoning"]
+self_model = ["cloud", "reasoning"]
+consolidation = ["cloud", "reasoning"]
+
+# Anything unmapped falls back to the local workhorse.
+default = ["fast"]

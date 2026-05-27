@@ -63,7 +63,7 @@ The first time Johnny becomes *visible*. Phase 5b builds the React + Vite SPA th
 - [x] `TASK-5b.2` Token gate: entry form (RHF+Zod), sessionStorage, header injection on the API client, `?token=` on WS; 1008/401 → re-prompt → `/frontend-react-architect` [TC-5b.7]
 - [x] `TASK-5b.3a` API client core — fetch wrapper + token-header injection + 401→re-gate handling + the React Query provider/setup + the shared `ServerEnvelope` typing convention (each adapter cites its 5a endpoint) → `/frontend-react-architect` [TC-5b.7, TC-5b.8]
 - [x] `TASK-5b.3b` ⫘ Typed read adapters + React Query hooks over 5b.3a — state, thoughts, memory (episodes+facts), goals, audit, sleeps, self + the conversation `send` (POST /input); each adapter a typed projection of 5a's envelope → `/frontend-react-architect` [TC-5b.8]
-- [ ] `TASK-5b.4` ⫘ WS service clients (`consciousnessSocket`, `stateSocket`) → Zustand stores; backfill-on-connect + auto-reconnect → `/frontend-react-architect` [TC-5b.2, TC-5b.3]
+- [x] `TASK-5b.4` ⫘ WS service clients (`consciousnessSocket`, `stateSocket`) → Zustand stores; backfill-on-connect + auto-reconnect → `/frontend-react-architect` [TC-5b.2, TC-5b.3]
 - [ ] `TASK-5b.5` **Service contract tests** — every adapter fed 5a's literal captured wire fixtures (`tests/fixtures/wire/*.json`), populated AND empty-state; assert the projection (Step 7c) → `/qa-test-engineer` [TC-5b.8]
 - [ ] `TASK-5b.6` ⫘ Conversation panel — message send (RHF+Zod) → `conversation.send` → optimistic + correlate the reply on the consciousness stream → `/frontend-react-architect` [TC-5b.1]
 - [ ] `TASK-5b.7` ⫘ Consciousness panel — live thought feed (Zustand), backfill, auto-scroll, reconnect → `/frontend-react-architect` [TC-5b.2]

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 # modules here as subsystems land (memory stores, etc.).
 import brain.agents.narrator  # noqa: F401
 import brain.agents.sensorium  # noqa: F401
+import brain.drives.engine  # noqa: F401
 import brain.llm.call_log  # noqa: F401
 import brain.memory.episodic  # noqa: F401
 import brain.memory.procedural  # noqa: F401

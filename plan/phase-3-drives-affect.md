@@ -45,8 +45,8 @@ This is what makes Johnny *want* — the difference between a continuously-narra
 
 ## Tasks
 
-- [ ] `TASK-3.1` Migrations + seed: `drive_state` (7 drives), `mood`, `goal` → `/fastapi-engineer`
-- [ ] `TASK-3.2` Drive engine: decay/accrual per tick, outcome adjustment, urge emission (incl. Energy depletion → sleep signal) → `/fastapi-engineer` [TC-3.1, TC-3.3, TC-3.7]
+- [x] `TASK-3.1` Migrations + seed: `drive_state` (7 drives), `mood`, `goal` → `/fastapi-engineer`
+- [x] `TASK-3.2` Drive engine: decay/accrual per tick, outcome adjustment, urge emission (incl. Energy depletion → sleep signal) → `/fastapi-engineer` [TC-3.1, TC-3.3, TC-3.7]
 - [ ] `TASK-3.3` ⫘ Affect: appraisal → mood delta + emotion tags + current-mood accessor → `/fastapi-engineer` [TC-3.4]
 - [ ] `TASK-3.4` Wire affect back into cognition: cycle-rate modulation + attention/recall salience bias + narration tone → `/fastapi-engineer` [TC-3.4]
 - [ ] `TASK-3.5` Goal arbiter: urge→goal promotion with anti-thrash hysteresis; persist + resume → `/fastapi-engineer` [TC-3.2, TC-3.5]

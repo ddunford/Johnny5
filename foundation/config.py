@@ -94,6 +94,13 @@ class Settings(BaseSettings):
     circuit_reset_seconds: float = Field(default=60.0)
     llm_schema_retries: int = Field(default=1)
 
+    # ── Drives (homeostatic motivational core, SPEC §6) ──
+    # Per-drive setpoints/rates/thresholds + the event→satisfaction map live in
+    # this git-backed TOML, not in constants — they are exactly what Johnny
+    # re-tunes about himself at runtime (FC-3 / Phase 9). The engine re-syncs the
+    # drive_state parameter columns from here on boot.
+    drives_config_path: str = Field(default="config/drives.toml")
+
     # ── Cognitive cycle (the heartbeat) ──
     # Base seconds between ticks. Fixed this phase; Phase 3 Affect modulates the
     # rate (excited → faster, tired → slower), which is why it's config not code.

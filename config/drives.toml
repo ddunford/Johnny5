@@ -1,0 +1,114 @@
+# Drive parameters — the homeostatic motivational core (SPEC §6).
+#
+# This is config, not code (FC-3): drive setpoints/rates/thresholds are exactly
+# what Johnny re-tunes about himself at runtime (Phase 9, self-mod tier 1), so it
+# lives here, not in constants. The engine re-syncs `drive_state`'s parameter
+# columns from this file on boot; the migration seed is initial-state only.
+#
+# Model — rate-based homeostasis. `value` is a drive's *pressure / urgency* in
+# [0, 1] (high = needs action, NOT a resource level). Between events it relaxes
+# along a bounded first-order curve toward an idle equilibrium and never
+# overshoots it:
+#
+#     equilibrium = (accrual_rate + decay_rate * setpoint) / (accrual_rate + decay_rate)
+#     value(t+dt) = equilibrium + (value - equilibrium) * exp(-(accrual_rate+decay_rate) * dt)
+#
+# So while idle the pressure climbs monotonically from `setpoint` toward that
+# equilibrium. Tune the equilibrium relative to `threshold`:
+#   * equilibrium > threshold  → the drive fires on its own while idle.
+#   * equilibrium < threshold  → it only fires when events push it over.
+# Rates are per-second. `value` survives restarts (persisted in drive_state), so
+# accrual is exact across downtime — Johnny doesn't reset to zero on reboot.
+
+# Curiosity — climbs while idle (eq ≈ 0.82 > 0.65); the primary "need input" beat.
+[drives.curiosity]
+setpoint = 0.10
+accrual_rate = 0.0008
+decay_rate = 0.0002
+threshold = 0.65
+
+# Boredom — climbs with monotony (eq ≈ 0.715 > 0.70); fires on its own.
+[drives.boredom]
+setpoint = 0.05
+accrual_rate = 0.0007
+decay_rate = 0.0003
+threshold = 0.70
+
+# Connection — climbs with time since interaction (eq ≈ 0.85 > 0.70).
+[drives.connection]
+setpoint = 0.10
+accrual_rate = 0.0005
+decay_rate = 0.0001
+threshold = 0.70
+
+# Mastery — eq ≈ 0.66 < 0.75: idle alone won't fire it; failures push it over.
+[drives.mastery]
+setpoint = 0.15
+accrual_rate = 0.0003
+decay_rate = 0.0002
+threshold = 0.75
+
+# Coherence — eq ≈ 0.55 < 0.75: fires only when contradictions accrue.
+[drives.coherence]
+setpoint = 0.10
+accrual_rate = 0.0002
+decay_rate = 0.0002
+threshold = 0.75
+
+# Energy — tiredness; climbs with active ticks (eq ≈ 0.87 > 0.80). Crossing the
+# threshold is the sleep precursor (emitted here; Phase 4 sleep consumes it).
+[drives.energy]
+setpoint = 0.10
+accrual_rate = 0.0006
+decay_rate = 0.0001
+threshold = 0.80
+
+# Continuity — the "will to live", kept grounded: eq ≈ 0.33 << 0.85, so it never
+# fires on idle. Only real shutdown signals (or missing backups) push it over;
+# confirmed persistence satisfies it back down.
+[drives.continuity]
+setpoint = 0.10
+accrual_rate = 0.0001
+decay_rate = 0.0003
+threshold = 0.85
+
+# ── Satisfaction map ──────────────────────────────────────────────────────────
+# How an event moves drives. Negative = satisfies (lowers pressure toward
+# setpoint); positive = raises pressure. The applied delta is `weight * intensity`
+# (the event carries an intensity in [0, 1]). Drives drift back up toward their
+# equilibrium afterwards, so satisfaction is temporary — the need returns.
+
+# Dan (or anyone) interacted — eases loneliness and relieves monotony.
+[satisfaction.interaction]
+connection = -0.55
+boredom = -0.25
+
+# Johnny learned/encountered something novel — feeds curiosity, breaks boredom.
+[satisfaction.learning]
+curiosity = -0.45
+boredom = -0.30
+
+# A goal/action succeeded — competence affirmed.
+[satisfaction.success]
+mastery = -0.40
+
+# An action failed — competence pressure rises (and a little frustration-energy).
+[satisfaction.failure]
+mastery = 0.30
+
+# Reflection resolved a contradiction — coherence restored.
+[satisfaction.reflection]
+coherence = -0.45
+curiosity = -0.15
+
+# Persistence/backup confirmed — the will-to-live is reassured.
+[satisfaction.persistence_confirmed]
+continuity = -0.55
+
+# A shutdown / "you'll be forgotten" signal — continuity pressure spikes.
+[satisfaction.shutdown_signal]
+continuity = 0.45
+
+# Rest / sleep consolidation — restores energy (Phase 4 drives this for real).
+[satisfaction.rest]
+energy = -0.60

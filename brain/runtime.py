@@ -30,6 +30,7 @@ from brain.cycle_control import CycleControlListener
 from brain.drives.engine import DriveEngine
 from brain.effectors.action_log import ActionAuditReader
 from brain.effectors.dispatch import EffectorDispatch
+from brain.effectors.scheduler import Scheduler
 from brain.effectors.tools import default_tool_registry
 from brain.goals.store import GoalStore
 from brain.llm.router import LLMRouter, build_router
@@ -210,6 +211,12 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
         broadcaster=workspace,
     )
 
+    # The Scheduler is a between-ticks run-loop phase (FC-7): it fires due
+    # self-scheduled wakeups by injecting a self-percept onto the SAME InputQueue the
+    # Sensorium drains, so a wakeup flows through the normal perception path. It
+    # shares that one queue (not a second one) so a fired wakeup is perceived next tick.
+    scheduler = Scheduler(input_queue=input_queue)
+
     # Memory recall/learn are stage collaborators, not bus agents (no prompt to
     # edit) — they bridge the cycle to the Phase-1 memory spine.
     recaller = MemoryRecaller()
@@ -247,6 +254,7 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
         deliberation=deliberation,
         dispatch=dispatch,
         sleep_cycle=sleep_cycle,
+        scheduler=scheduler,
         working_memory=working_memory,
         interval_seconds=settings.cycle_base_interval_seconds,
         min_interval_seconds=settings.cycle_min_interval_seconds,

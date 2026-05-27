@@ -42,6 +42,7 @@ from brain.agents.conscience import ProposedAction
 from brain.agents.deliberation import Action, ActionOutcome, DeliberationResult
 from brain.drives.engine import EVENT_INTERACTION, SLEEP_DRIVE, DriveEvent, DriveReading, Urge
 from brain.effectors.dispatch import EffectorDispatch, VettedAction
+from brain.effectors.scheduler import Scheduler
 from brain.goals.store import Goal, goals_to_payload
 from brain.memory.working import WorkingMemory, WorkingMemoryItem
 from brain.sleep import CheckResult, SleepCycle, SleepLog, SleepReport
@@ -265,6 +266,7 @@ class CognitiveCycle:
         deliberation: DeliberationStage | None = None,
         dispatch: EffectorDispatch | None = None,
         sleep_cycle: SleepCycle | None = None,
+        scheduler: Scheduler | None = None,
         working_memory: WorkingMemory | None = None,
         interval_seconds: float = 4.0,
         min_interval_seconds: float = 1.5,
@@ -286,6 +288,7 @@ class CognitiveCycle:
         self._deliberation = deliberation
         self._dispatch = dispatch
         self._sleep_cycle = sleep_cycle
+        self._scheduler = scheduler
         self._working_memory = working_memory
         self._interval = interval_seconds
         # Bounds on the affect-modulated interval (the floor is the 3.12 spin guard).
@@ -378,6 +381,11 @@ class CognitiveCycle:
                     break
                 try:
                     await self.tick()
+                    # Between-ticks run-loop phases (FC-7), not tick stages. Fire any due
+                    # self-scheduled wakeups first (they enqueue a self-percept the next
+                    # tick perceives), then enter the offline sleep phase if its trigger
+                    # fires. Both run while normal ticking is paused; tick() is untouched.
+                    await self._fire_due_wakeups()
                     # Sleep is a phase the loop enters BETWEEN ticks (FC-7): when the
                     # trigger fires, normal ticking pauses while the offline pipeline
                     # runs, then the heartbeat resumes. tick()'s shape is untouched.
@@ -393,6 +401,26 @@ class CognitiveCycle:
         finally:
             self._running = False
             _log.info("cycle.run.stop", ticks=self._tick)
+
+    async def _fire_due_wakeups(self) -> None:
+        """Between ticks, fire any due self-scheduled wakeups (FC-7 run-loop phase).
+
+        Each due wakeup is claimed (atomically flipped ``pending → fired`` so it
+        can't double-fire) and injected as a self-percept onto the Sensorium's input
+        queue, surfacing on the next tick's PERCEIVE — Johnny "remembers" his earlier
+        intention. A scheduler failure degrades this phase but never the heartbeat.
+        """
+        if self._scheduler is None:
+            return
+        try:
+            fired = await self._scheduler.fire_due()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # a due-check failure must not kill the loop
+            _log.warning("cycle.wakeups.degraded", tick=self._tick, error=str(exc))
+            return
+        if fired:
+            _log.info("cycle.wakeups.fired", count=len(fired), tick=self._tick)
 
     async def _maybe_sleep(self) -> None:
         """Between ticks, enter the offline sleep phase if the trigger fires (FC-7).

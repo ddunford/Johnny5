@@ -59,7 +59,8 @@ The first moment Johnny is *alive*. This phase builds the Global Workspace (the 
 - [x] `TASK-2.11` Frozen-clock cycle harness → `/qa-test-engineer` [TC-2.1]
 - [x] `TASK-2.12` Cycle/attention/narrator tests: deterministic tick, attention bounds, narration references recalled memory, loop survives forced provider failure → `/qa-test-engineer` [TC-2.1, TC-2.3, TC-2.5, TC-2.6]
 - [x] `TASK-2.13` ⫘ Narrator contract test (model output → `thought` projection) → `/qa-test-engineer`
-- [ ] `TASK-2.14` ⫘ Security review: WebSocket auth/gate, workspace log has no secrets, REPL access controlled → `/security-reviewer`
+- [x] `TASK-2.14` ⫘ Security review: WebSocket auth/gate, workspace log has no secrets, REPL access controlled → `/security-reviewer`
+  - Verdict: **PASS — found + fixed one MEDIUM.** `/ws/consciousness` + the cycle-control channel were unauthenticated on the public router (inner monologue world-readable); fixed with an interim `WS_TOKEN` shared-token gate (constant-time compare on both surfaces, rejects before streaming, token never logged, dev-open when blank). Full session-auth → Phase 5 (TODO.md). Clean otherwise: no secrets in workspace/thought payloads or logs, parameterised queries (no f-string SQL from percept content), no eval/exec/shell/pickle in REPL/control/sensorium.
 
 ## Notes
 - Still no web UI — the deliverable is verified via the REPL + `/ws/consciousness` + pytest. Playwright arrives in Phase 5.

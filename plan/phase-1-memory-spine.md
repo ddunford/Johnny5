@@ -52,7 +52,7 @@ Working memory is **Redis** (bounded, TTL/decay), not a table.
 - [x] `TASK-1.3` ⫘ Semantic memory: fact upsert, recall, edge linking → `/fastapi-engineer` [TC-1.3]
 - [x] `TASK-1.4` ⫘ Procedural memory: skill store/find/reinforce → `/fastapi-engineer` [TC-1.4]
 - [x] `TASK-1.5` Working memory (Redis): bounded buffer, decay, salience eviction → `/fastapi-engineer` [TC-1.5]
-- [ ] `TASK-1.6` Consolidator stub: interface + naive episodic→semantic pass → `/fastapi-engineer` [TC-1.6]
+- [x] `TASK-1.6` Consolidator stub: interface + naive episodic→semantic pass → `/fastapi-engineer` [TC-1.6]
 - [ ] `TASK-1.7` Snapshot/restore of all stores (continuity foundation) → `/fastapi-engineer` [TC-1.7]
 - [ ] `TASK-1.8` Memory repository unit tests + recall-ranking tests (deterministic/seeded embeddings) → `/qa-test-engineer` [TC-1.1, TC-1.2, TC-1.3, TC-1.4]
 - [ ] `TASK-1.9` Restart-persistence integration test (write → restart → recall) → `/qa-test-engineer` [TC-1.7]

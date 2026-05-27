@@ -5,8 +5,6 @@ import {
   acquireConsciousnessStream,
 } from "./consciousnessSocket";
 import { __setStateSocketFactory, acquireStateStream } from "./stateSocket";
-import { adaptStateFrame, adaptThoughtFrame } from "./wsFrames";
-import type { StateFrame, ThoughtFrame } from "./wsFrames";
 import { useConsciousnessStore } from "@/stores/consciousnessStore";
 import { useStateStore } from "@/stores/stateStore";
 import { getToken, setToken } from "@/auth/tokenStore";
@@ -37,31 +35,9 @@ class FakeWebSocket implements WebSocketLike {
   }
 }
 
-describe("WS frame adapters · fixtures", () => {
-  it("adaptThoughtFrame drops the wrapper (ws_consciousness)", () => {
-    const frames = loadWire<ThoughtFrame[]>("ws_consciousness");
-    const thought = adaptThoughtFrame(frames[0]);
-    expect(thought).toEqual({
-      id: frames[0].id,
-      ts: frames[0].ts,
-      text: frames[0].text,
-    });
-    expect("type" in thought).toBe(false);
-    expect(loadWire<ThoughtFrame[]>("ws_consciousness.empty")).toEqual([]);
-  });
-
-  it("adaptStateFrame projects the frame payload (ws_state populated + empty)", () => {
-    const populated = adaptStateFrame(loadWire<StateFrame>("ws_state"));
-    expect(populated.drives).toHaveLength(7);
-    expect(populated.mood?.descriptor).toContain("calm");
-    expect(populated.sleep.last?.self_model_version).toBe(2);
-
-    const empty = adaptStateFrame(loadWire<StateFrame>("ws_state.empty"));
-    expect(empty.mood).toBeNull();
-    expect(empty.goals).toEqual([]);
-    expect(empty.sleep.last).toBeNull();
-  });
-});
+// NOTE: the WS frame adapters (adaptThoughtFrame / adaptStateFrame) are pinned
+// against the literal ws_* fixtures by qa's load-bearing contract suite
+// (adapters.contract.test.ts). This file keeps only the socket *behaviour*.
 
 describe("ReconnectingSocket", () => {
   beforeEach(() => vi.useFakeTimers());

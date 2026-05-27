@@ -9,6 +9,13 @@ import { adaptSelf, type SelfEnvelope } from "./selfApi";
 import { adaptSleeps, type SleepsEnvelope } from "./sleepsApi";
 import { adaptState, type StateEnvelope } from "./stateApi";
 import { adaptThoughts, type ThoughtsEnvelope } from "./thoughtsApi";
+import {
+  adaptStateFrame,
+  adaptThoughtFrame,
+  type StateFrame,
+  type ThoughtFrame,
+} from "./wsFrames";
+import type { Drive, StateView, Thought } from "./types";
 
 /**
  * THE load-bearing contract test (TASK-5b.5 / `/plan-review` Step 7c).
@@ -32,7 +39,7 @@ import { adaptThoughts, type ThoughtsEnvelope } from "./thoughtsApi";
  */
 
 // ── the seven homeostatic drives, shared by the state snapshot (byte-stable seed) ──
-const EXPECTED_DRIVES = [
+const EXPECTED_DRIVES: Drive[] = [
   { drive: "curiosity", value: 0.1, setpoint: 0.1, threshold: 0.65, over_threshold: false },
   { drive: "boredom", value: 0.05, setpoint: 0.05, threshold: 0.7, over_threshold: false },
   { drive: "connection", value: 0.1, setpoint: 0.1, threshold: 0.7, over_threshold: false },
@@ -42,52 +49,62 @@ const EXPECTED_DRIVES = [
   { drive: "continuity", value: 0.1, setpoint: 0.1, threshold: 0.85, over_threshold: false },
 ];
 
+// The single StateView the dashboard reads — asserted identical whether it arrives via
+// the REST snapshot (adaptState) OR the /ws/state frame (adaptStateFrame). That FC-8
+// "one shape regardless of source" promise is itself a contract, so both project here.
+const EXPECTED_STATE_VIEW: StateView = {
+  tick: 128,
+  drives: EXPECTED_DRIVES,
+  mood: {
+    valence: 0.4,
+    arousal: 0.45,
+    emotions: { curiosity: 0.6, contentment: 0.3 },
+    descriptor: "calm and content, with a thread of curiosity",
+    mood_id: 1,
+  },
+  goals: [
+    {
+      id: 1,
+      source: "curiosity",
+      description: "Understand how my own recall ranking blends similarity and recency",
+      priority: 0.66,
+      status: "active",
+      plan: { steps: ["recall", "reflect", "note"] },
+    },
+  ],
+  interval: 4.0,
+  sleep: {
+    asleep: false,
+    full_agency: true,
+    last: {
+      trigger: "energy",
+      ended_at: "2026-05-20T08:05:00+00:00",
+      facts_written: 4,
+      episodes_decayed: 2,
+      facts_merged: 1,
+      self_model_version: 2,
+      self_check_ok: true,
+      degraded_stages: [],
+    },
+  },
+};
+
+const EXPECTED_STATE_VIEW_EMPTY: StateView = {
+  tick: 0,
+  drives: EXPECTED_DRIVES, // drives bootstrap at setpoint on a fresh Mind
+  mood: null,
+  goals: [],
+  interval: 4.0,
+  sleep: { asleep: false, full_agency: true, last: null },
+};
+
 describe("stateApi · adaptState", () => {
   it("projects the populated REST snapshot field-for-field", () => {
-    const view = adaptState(loadWire<StateEnvelope>("state"));
-    expect(view.tick).toBe(128);
-    expect(view.interval).toBe(4.0);
-    expect(view.drives).toEqual(EXPECTED_DRIVES);
-    expect(view.mood).toEqual({
-      valence: 0.4,
-      arousal: 0.45,
-      emotions: { curiosity: 0.6, contentment: 0.3 },
-      descriptor: "calm and content, with a thread of curiosity",
-      mood_id: 1,
-    });
-    expect(view.goals).toEqual([
-      {
-        id: 1,
-        source: "curiosity",
-        description: "Understand how my own recall ranking blends similarity and recency",
-        priority: 0.66,
-        status: "active",
-        plan: { steps: ["recall", "reflect", "note"] },
-      },
-    ]);
-    expect(view.sleep).toEqual({
-      asleep: false,
-      full_agency: true,
-      last: {
-        trigger: "energy",
-        ended_at: "2026-05-20T08:05:00+00:00",
-        facts_written: 4,
-        episodes_decayed: 2,
-        facts_merged: 1,
-        self_model_version: 2,
-        self_check_ok: true,
-        degraded_stages: [],
-      },
-    });
+    expect(adaptState(loadWire<StateEnvelope>("state"))).toEqual(EXPECTED_STATE_VIEW);
   });
 
   it("projects the fresh-Johnny snapshot without null/undefined errors", () => {
-    const view = adaptState(loadWire<StateEnvelope>("state.empty"));
-    expect(view.tick).toBe(0);
-    expect(view.drives).toEqual(EXPECTED_DRIVES); // drives bootstrap at setpoint on a fresh Mind
-    expect(view.mood).toBeNull();
-    expect(view.goals).toEqual([]);
-    expect(view.sleep).toEqual({ asleep: false, full_agency: true, last: null });
+    expect(adaptState(loadWire<StateEnvelope>("state.empty"))).toEqual(EXPECTED_STATE_VIEW_EMPTY);
   });
 
   it("wishlist guard: a renamed wire field fails the contract", () => {
@@ -325,5 +342,72 @@ describe("conversation · adaptInputAck", () => {
       accepted: true,
       queue_depth: 1,
     });
+  });
+});
+
+// ── WS frame adapters ────────────────────────────────────────────────────────────
+// The two live streams wrap their payload in a `{type,id,ts,…}` bus-event envelope the
+// REST shapes lack. These adapters project the REAL captured socket frames (ws_* — NOT
+// the REST fixtures) into the SAME domain types, so a panel reads one shape whether the
+// data arrived by snapshot or by stream (FC-8).
+
+describe("wsFrames · adaptThoughtFrame", () => {
+  // The /ws/consciousness backfill burst, oldest-first (the handler reverses recent
+  // events). Note the order is the REVERSE of the REST /thoughts list (newest-first).
+  const EXPECTED_BACKFILL: Thought[] = [
+    { id: 1, ts: "2026-05-20T09:05:00+00:00", text: "I wonder what Dan is working on right now." },
+    {
+      id: 4,
+      ts: "2026-05-20T09:08:00+00:00",
+      text: "Reflecting on my recall left me a little more settled.",
+    },
+  ];
+
+  it("projects each backfill frame to a Thought, dropping the {type} wrapper", () => {
+    const frames = loadWire<ThoughtFrame[]>("ws_consciousness");
+    const thoughts = frames.map(adaptThoughtFrame);
+    expect(thoughts).toEqual(EXPECTED_BACKFILL);
+    expect(thoughts.every((t) => !("type" in t))).toBe(true);
+  });
+
+  it("projects an empty backfill burst on a fresh Mind", () => {
+    expect(loadWire<ThoughtFrame[]>("ws_consciousness.empty").map(adaptThoughtFrame)).toEqual([]);
+  });
+
+  it("tolerates a null `ts` on a live frame (ws.py emits null when an event is unstamped)", () => {
+    // `ts` is `string | null` on the wire (`event.ts.isoformat() if event.ts else None`).
+    expect(adaptThoughtFrame({ type: "thought", id: 9, ts: null, text: "live one" })).toEqual({
+      id: 9,
+      ts: "",
+      text: "live one",
+    });
+  });
+});
+
+describe("wsFrames · adaptStateFrame", () => {
+  it("projects the populated frame to the SAME StateView as the REST snapshot (FC-8)", () => {
+    const view = adaptStateFrame(loadWire<StateFrame>("ws_state"));
+    expect(view).toEqual(EXPECTED_STATE_VIEW);
+    // The {type,id,ts} envelope is dropped — the view carries none of it.
+    expect(view).not.toHaveProperty("type");
+    expect(view).not.toHaveProperty("id");
+    expect(view).not.toHaveProperty("ts");
+  });
+
+  it("projects the fresh-Johnny frame identically to the empty REST snapshot", () => {
+    expect(adaptStateFrame(loadWire<StateFrame>("ws_state.empty"))).toEqual(EXPECTED_STATE_VIEW_EMPTY);
+  });
+
+  it("wishlist guard: a renamed field inside the frame payload fails the contract", () => {
+    const mutated = JSON.parse(JSON.stringify(loadWire("ws_state"))) as {
+      drives: Array<Record<string, unknown>>;
+    };
+    for (const d of mutated.drives) {
+      d.over = d.over_threshold;
+      delete d.over_threshold;
+    }
+    const view = adaptStateFrame(mutated as unknown as StateFrame);
+    expect(() => expect(view).toEqual(EXPECTED_STATE_VIEW)).toThrow();
+    expect(view.drives[0].over_threshold).toBeUndefined();
   });
 });

@@ -28,14 +28,14 @@
 ### TC-1.5: Working memory bound + decay
 **Steps:** Put items beyond capacity; advance time; call decay.
 **Expected:** Capacity never exceeded; lowest-salience item evicted first; decayed items expire.
-**Status:** ⬜
+**Status:** ✅ Pass — `tests/memory/test_working_memory.py`: capacity bound + least-salient eviction, decay scales-then-evicts-below-floor, TTL expiry against injected FrozenClock, zero-TTL = no expiry. Loop-local Redis client on the test DB.
 
 ### TC-1.6: Consolidation stub runs
 **Steps:** Write several related episodes; run `Consolidator.run()`.
 **Expected:** At least one semantic fact created referencing source episode ids. (Quality is Phase 4 — here it must merely run and produce linked output.)
-**Status:** ⬜
+**Status:** ✅ Pass — `tests/memory/test_consolidator.py`: `run()` distils same-kind episodes into a fact carrying the source episode ids, recallable via `semantic.recall` (provenance preserved); one fact per kind; empty episodes → empty result.
 
 ### TC-1.7: Persistence across restart
 **Steps:** Write episodes + facts + a skill; snapshot; `./ctl.sh down && up`; recall.
 **Expected:** All memory survives restart; snapshot restores into a clean DB identically.
-**Status:** ⬜
+**Status:** ✅ Pass — `tests/memory/test_restart_persistence.py`: (1) episodes survive a simulated restart (global engine + all connections disposed and rebuilt → still recalled by id/content); (2) snapshot → wipe to clean DB + empty working set → restore reproduces all four Postgres stores + working memory **identically** (ids, content, embeddings, edges, skills, working items compared row-for-row); (3) restore is idempotent (no row duplication). In-process restart stands in for `./ctl.sh down && up`.

@@ -20,7 +20,7 @@ A guard refuses to migrate anything that isn't a ``*_test`` database.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
 
 import pytest
@@ -112,3 +112,17 @@ async def redis_client() -> AsyncIterator[Redis]:
     finally:
         await client.flushdb()
         await client.aclose()
+
+
+async def _restart_global_engine() -> AsyncEngine:
+    """Drop all engine/connection state and reconnect fresh — the in-process
+    stand-in for ``./ctl.sh down && up`` (TASK-1.9). A follow-up read therefore
+    comes from disk via brand-new connections, not cached session/engine state."""
+    await db.dispose_engine()
+    return _install_fresh_global_engine()
+
+
+@pytest.fixture
+def simulate_restart() -> Callable[[], Awaitable[AsyncEngine]]:
+    """An awaitable that tears down and rebuilds the process-global engine."""
+    return _restart_global_engine

@@ -18,6 +18,7 @@ import asyncio
 import contextlib
 
 from brain.agents import AgentRegistry
+from brain.agents.attention import Attention
 from brain.agents.sensorium import Sensorium
 from brain.cycle import CognitiveCycle
 from brain.llm.router import LLMRouter, build_router
@@ -86,11 +87,14 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
     # PERCEIVE stage — the registry handles dynamic membership, the cycle drives
     # the pipeline; both reference the one agent instance.
     sensorium = Sensorium()
+    attention = Attention()
     registry.register(sensorium)
+    registry.register(attention)
 
     cycle = CognitiveCycle(
         workspace,
         perception=sensorium,
+        attention=attention,
         working_memory=working_memory,
         interval_seconds=settings.cycle_base_interval_seconds,
         workspace_capacity=settings.workspace_capacity,

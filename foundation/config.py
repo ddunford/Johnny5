@@ -107,6 +107,14 @@ class Settings(BaseSettings):
     # the percept log with "nothing happened" rows (Phase 4 sleep prunes the rest).
     sensorium_ambient_persist_every_ticks: int = Field(default=15)
 
+    # ── Attention (the bottleneck) ──
+    # Salience = intrinsic weight + a novelty bonus; recently-surfaced content is
+    # penalised so Johnny doesn't fixate on the same ambient line every tick.
+    # Phase 3 adds goal/drive/emotional-charge terms. Tunable (FC-3).
+    attention_weight_salience: float = Field(default=1.0)
+    attention_weight_novelty: float = Field(default=0.6)
+    attention_repeat_penalty: float = Field(default=0.5)
+
     # ── Interfaces ──
     public_domain: str = Field(default="johnny.demosrv.uk")
     web_port: int = Field(default=80)

@@ -336,11 +336,12 @@ class CognitiveCycle:
             selected = await self._attention.select(
                 working_memory=working_items, percepts=ctx.percepts
             )
-            ctx.contents = list(selected)
         else:
-            # No Attention wired yet: pass percepts through, still bounded so the
-            # workspace never grows unbounded even in the skeleton.
-            ctx.contents = list(ctx.percepts)[: self._capacity]
+            # No Attention wired yet: pass percepts through.
+            selected = list(ctx.percepts)
+        # Defensive bound — the bottleneck invariant ("the workspace never grows
+        # unbounded") holds even if a misbehaving Attention over-selects.
+        ctx.contents = list(selected)[: self._capacity]
 
         await self._workspace.set_contents(ctx.contents)
         await self._emit(

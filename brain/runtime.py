@@ -20,6 +20,7 @@ import contextlib
 from brain.affect.agent import Affect
 from brain.agents import AgentRegistry
 from brain.agents.attention import Attention
+from brain.agents.deliberation import Deliberation
 from brain.agents.memory_stages import EpisodicLearner, MemoryRecaller
 from brain.agents.narrator import Narrator
 from brain.agents.sensorium import Sensorium
@@ -120,6 +121,13 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
     registry.register(affect)
     drives = DriveEngine()
 
+    # Deliberation closes the autonomy loop (registered inner agent, FC-2/FC-3): it
+    # arbitrates urges → a goal and acts on it with an INTERNAL action only
+    # (reflect/recall/consolidate/formulate-question) — external tools are Phase 6.
+    # It owns the goal store + arbiter so the cycle's DELIBERATE/ACT stay thin.
+    deliberation = Deliberation(router)
+    registry.register(deliberation)
+
     # Memory recall/learn are stage collaborators, not bus agents (no prompt to
     # edit) — they bridge the cycle to the Phase-1 memory spine.
     recaller = MemoryRecaller()
@@ -134,6 +142,7 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
         learning=learner,
         drives=drives,
         affect=affect,
+        deliberation=deliberation,
         working_memory=working_memory,
         interval_seconds=settings.cycle_base_interval_seconds,
         min_interval_seconds=settings.cycle_min_interval_seconds,

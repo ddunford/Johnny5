@@ -38,7 +38,9 @@ from typing import Protocol, runtime_checkable
 
 from brain.affect.appraisal import Mood
 from brain.agents.attention import AttentionBias
+from brain.agents.deliberation import Action, ActionOutcome, DeliberationResult
 from brain.drives.engine import EVENT_INTERACTION, SLEEP_DRIVE, DriveEvent, DriveReading, Urge
+from brain.goals.store import Goal
 from brain.memory.working import WorkingMemory, WorkingMemoryItem
 from brain.workspace import Workspace, WorkspaceEvent, WorkspaceItem
 from foundation.observability import get_logger
@@ -132,6 +134,24 @@ class AffectStage(Protocol):
     ) -> Mood: ...
 
 
+@runtime_checkable
+class DeliberationStage(Protocol):
+    """Deliberation: arbitrate to a goal and plan/execute an internal action."""
+
+    async def deliberate(
+        self,
+        *,
+        urges: Sequence[Urge],
+        mood: Mood | None,
+        contents: Sequence[WorkspaceItem],
+        now: datetime | None = None,
+    ) -> DeliberationResult: ...
+
+    async def act(
+        self, action: Action, goal: Goal, contents: Sequence[WorkspaceItem]
+    ) -> ActionOutcome: ...
+
+
 # ── per-tick state + report ────────────────────────────────────────────────────
 
 
@@ -147,6 +167,8 @@ class CycleContext:
     mood: Mood | None = None
     urges: list[Urge] = field(default_factory=list)
     events: list[DriveEvent] = field(default_factory=list)
+    goal: Goal | None = None
+    action: Action | None = None
     stage_errors: dict[str, str] = field(default_factory=dict)
 
 
@@ -232,6 +254,7 @@ class CognitiveCycle:
         learning: LearningStage | None = None,
         drives: DriveStage | None = None,
         affect: AffectStage | None = None,
+        deliberation: DeliberationStage | None = None,
         working_memory: WorkingMemory | None = None,
         interval_seconds: float = 4.0,
         min_interval_seconds: float = 1.5,
@@ -250,6 +273,7 @@ class CognitiveCycle:
         self._learning = learning
         self._drives = drives
         self._affect = affect
+        self._deliberation = deliberation
         self._working_memory = working_memory
         self._interval = interval_seconds
         # Bounds on the affect-modulated interval (the floor is the 3.12 spin guard).
@@ -602,21 +626,64 @@ class CognitiveCycle:
         return min(self._max_interval, max(self._min_interval, interval))
 
     async def _deliberate(self, ctx: CycleContext) -> None:
-        """DELIBERATE — Planner picks an action for the active goal. Stub until Phase 6."""
+        """DELIBERATE — arbitrate to the active goal and plan an internal action.
+
+        Fills the Phase-2 stub in place (FC-7). Arbitration runs every tick;
+        Deliberation only *plans* an action when its cadence is due, so the heavy
+        step stays bounded. Phase 6 will insert a real Conscience at CHECK and a
+        tool belt at ACT; here the action is internal (reflect/recall/…).
+        """
+        if self._deliberation is None:
+            return
+        result = await self._deliberation.deliberate(
+            urges=ctx.urges, mood=ctx.mood, contents=ctx.contents
+        )
+        ctx.goal = result.goal
+        ctx.action = result.action
+        if ctx.goal is not None:
+            await self._emit(
+                ctx,
+                "deliberation",
+                "goal.active",
+                {
+                    "id": ctx.goal.id,
+                    "source": ctx.goal.source,
+                    "description": ctx.goal.description,
+                    "priority": round(ctx.goal.priority, 4),
+                },
+                stage="deliberate",
+            )
 
     async def _check(self, ctx: CycleContext) -> None:
-        """CHECK — Conscience vets the proposed action. Stub until Phase 6."""
+        """CHECK — Conscience vets the proposed action. Stub until Phase 6.
+
+        Phase-3 actions are internal (reflect/recall/consolidate/formulate); the
+        Conscience that vets *external* action lands with the tool belt (Phase 6).
+        """
 
     async def _act(self, ctx: CycleContext) -> None:
-        """ACT — Effectors execute the approved action. Stub until Phase 6.
+        """ACT — execute the planned internal action through the dispatch seam (FC-5).
 
-        No action is produced yet, but the dispatch seam (FC-5) is reached every
-        tick so Phase 6 can wrap *all* actions through one audited point without
-        moving the stage.
+        Bounded to one action per tick. Deliberation runs the action and resolves
+        the goal; the cycle routes it through the single audited dispatch point and
+        enqueues the satisfaction event so the *next* APPRAISE eases the drive — the
+        feedback that closes the autonomy loop. Phase 6's external effectors slot in
+        here behind the same seam.
         """
-        # When DELIBERATE/CHECK produce an approved action, it routes here:
-        #   await self._dispatch_action(action)
-        return
+        if self._deliberation is None or ctx.action is None or ctx.goal is None:
+            return
+        outcome = await self._deliberation.act(ctx.action, ctx.goal, ctx.contents)
+        await self._dispatch_action(
+            {
+                "action": ctx.action.kind,
+                "goal_id": ctx.goal.id,
+                "goal_source": ctx.goal.source,
+                "summary": outcome.summary,
+                "success": outcome.success,
+            }
+        )
+        for event in outcome.drive_events:
+            self.enqueue_drive_event(event)
 
     async def _dispatch_action(self, action: dict[str, object]) -> None:
         """The single action dispatch + audit point (FC-5).

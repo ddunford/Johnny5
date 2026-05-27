@@ -6,12 +6,10 @@ Single source of truth for open work, in order. Move items between sections; del
 
 ## In progress
 
-_(nothing yet — start with Phase 0)_
+### Phase 0 — Foundations  →  `plan/phase-0-foundations.md`  ⟵ team `johnny5-phase-0`
+The substrate. Build: Docker + `ctl.sh`, Postgres+pgvector, Redis, FastAPI skeleton, the **LLM router (Groq ⇄ gemma4/qwen) with circuit breakers**, embeddings client (`/embed`), vision (gemma4), structured logging, Sentry, health endpoint, CI. Verified end-to-end against real `inference.lan` + Groq (substrate already proven — see `plan/inference-substrate.md`). **Done = the lights turn on.**
 
 ## Next
-
-### Phase 0 — Foundations  →  `plan/phase-0-foundations.md`
-The substrate. Repo already scaffolded (SPEC, README, secret hygiene). Build: Docker + `ctl.sh`, Postgres+pgvector, Redis, FastAPI skeleton, the **LLM router (Groq ⇄ Qwen) with circuit breakers**, embeddings client, vision client, structured logging, Sentry, health endpoint, CI. Verified end-to-end against real `inference.lan` + Groq. **Done = the lights turn on.**
 
 ### Phase 1 — Memory spine  →  `plan/phase-1-memory-spine.md`
 Four memory stores (working/episodic/semantic/procedural), embedding-based hybrid recall, episodic write path, consolidation stub. No cognition yet — a memory you can write to and query. **Done = Johnny can remember and recall.**

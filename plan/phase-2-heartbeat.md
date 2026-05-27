@@ -46,7 +46,7 @@ The first moment Johnny is *alive*. This phase builds the Global Workspace (the 
 
 ## Tasks
 
-- [ ] `TASK-2.1` Workspace bus: Redis pub/sub broadcast/subscribe + persist to `workspace_event` → `/fastapi-engineer` [TC-2.4]
+- [x] `TASK-2.1` Workspace bus: Redis pub/sub broadcast/subscribe + persist to `workspace_event` → `/fastapi-engineer` [TC-2.4]
 - [ ] `TASK-2.2` `InnerAgent` protocol + startup registry wiring subscriptions → `/fastapi-engineer`
 - [ ] `TASK-2.3` Cognitive cycle skeleton (full pipeline, stubbed stages, lifespan-managed start/stop) → `/fastapi-engineer` [TC-2.1]
 - [x] `TASK-2.4` ⫘ Migrations: `workspace_event`, `thought`, `percept` → `/fastapi-engineer`

@@ -15,23 +15,33 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from foundation.config import Settings, get_settings
+from foundation.db import dispose_engine
 from foundation.observability import configure_logging, get_logger
+from foundation.redis_client import close_redis
 from johnny.api.health import health_router
 from johnny.api.v1.router import v1_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Open shared resources on startup, release them on shutdown."""
+    """Open shared resources on startup, release them on shutdown.
+
+    Connections are established lazily on first use, so a missing dependency
+    leaves Johnny running and reported unhealthy rather than crashing the boot
+    (graceful degradation). Shutdown releases the engine and Redis client.
+    """
     settings: Settings = app.state.settings
     log = get_logger("johnny.lifespan")
     log.info("startup.begin", service=settings.service_name, environment=settings.app_env)
 
-    # Resource wiring (DB engine, Redis client, cognitive cycle) is attached to
-    # app.state by later tasks. The lifespan seam is fixed here so they slot in.
-    yield
-
-    log.info("shutdown.complete", service=settings.service_name)
+    # The cognitive cycle and other long-lived resources attach to app.state in
+    # later phases. The lifespan seam is fixed here so they slot in.
+    try:
+        yield
+    finally:
+        await dispose_engine()
+        await close_redis()
+        log.info("shutdown.complete", service=settings.service_name)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

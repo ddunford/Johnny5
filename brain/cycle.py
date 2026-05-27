@@ -42,6 +42,7 @@ from brain.agents.deliberation import Action, ActionOutcome, DeliberationResult
 from brain.drives.engine import EVENT_INTERACTION, SLEEP_DRIVE, DriveEvent, DriveReading, Urge
 from brain.goals.store import Goal, goals_to_payload
 from brain.memory.working import WorkingMemory, WorkingMemoryItem
+from brain.sleep import SleepCycle, SleepReport
 from brain.workspace import Workspace, WorkspaceEvent, WorkspaceItem
 from foundation.observability import get_logger
 
@@ -258,6 +259,7 @@ class CognitiveCycle:
         drives: DriveStage | None = None,
         affect: AffectStage | None = None,
         deliberation: DeliberationStage | None = None,
+        sleep_cycle: SleepCycle | None = None,
         working_memory: WorkingMemory | None = None,
         interval_seconds: float = 4.0,
         min_interval_seconds: float = 1.5,
@@ -277,6 +279,7 @@ class CognitiveCycle:
         self._drives = drives
         self._affect = affect
         self._deliberation = deliberation
+        self._sleep_cycle = sleep_cycle
         self._working_memory = working_memory
         self._interval = interval_seconds
         # Bounds on the affect-modulated interval (the floor is the 3.12 spin guard).
@@ -295,6 +298,12 @@ class CognitiveCycle:
         # Outcome events Deliberation/Act queue this tick, consumed by the *next*
         # APPRAISE so a goal's result feeds drives+affect (FC-5 dispatch → feedback).
         self._pending_events: list[DriveEvent] = []
+        # Sleep is a run-loop phase between ticks (FC-7), not a tick stage. The last
+        # tick's urges feed the trigger; degraded ticks since the last sleep feed the
+        # metacognition review; the last report surfaces on /ws/state + the REPL.
+        self._last_urges: list[Urge] = []
+        self._degraded_ticks = 0
+        self._last_sleep: SleepReport | None = None
 
     # ── lifecycle ────────────────────────────────────────────────────────────
 
@@ -355,6 +364,10 @@ class CognitiveCycle:
                     break
                 try:
                     await self.tick()
+                    # Sleep is a phase the loop enters BETWEEN ticks (FC-7): when the
+                    # trigger fires, normal ticking pauses while the offline pipeline
+                    # runs, then the heartbeat resumes. tick()'s shape is untouched.
+                    await self._maybe_sleep()
                     # APPRAISE set the next interval from mood/energy (bounded); the
                     # heartbeat speeds up when aroused and drags when tired.
                     await self._sleep(self._next_interval)
@@ -366,6 +379,55 @@ class CognitiveCycle:
         finally:
             self._running = False
             _log.info("cycle.run.stop", ticks=self._tick)
+
+    async def _maybe_sleep(self) -> None:
+        """Between ticks, enter the offline sleep phase if the trigger fires (FC-7).
+
+        Checks the sleep trigger against the last tick's urges (Energy over threshold)
+        or the cadence; when due, broadcasts the awake→asleep transition, runs the
+        bounded sleep pipeline (normal ticking is paused — we're between ticks), then
+        broadcasts asleep→awake with the summary. A wedged sleep is impossible: the
+        pipeline is per-stage isolated and always returns. ``tick()`` is never touched.
+        """
+        if self._sleep_cycle is None:
+            return
+        trigger = self._sleep_cycle.sleep_trigger(self._last_urges, tick=self._tick)
+        if trigger is None:
+            return
+        _log.info("cycle.sleep.enter", trigger=trigger, tick=self._tick)
+        await self._emit_sleep_transition(asleep=True)
+        report = await self._sleep_cycle.sleep(trigger=trigger, degraded_ticks=self._degraded_ticks)
+        if report is not None:
+            self._last_sleep = report
+            self._degraded_ticks = 0
+        await self._emit_sleep_transition(asleep=False)
+        _log.info(
+            "cycle.sleep.wake",
+            self_check_ok=report.self_check_ok if report else None,
+            self_model_version=report.self_model_version if report else None,
+        )
+
+    async def _emit_sleep_transition(self, *, asleep: bool) -> None:
+        """Broadcast a state snapshot marking the awake↔asleep transition (FC-8).
+
+        Emitted outside a tick (there is no ``ctx`` mid-sleep), so the cognition
+        fields are empty and only the ``sleep`` block is meaningful — enough for a
+        consumer to flip its awake/asleep indicator and show the last-sleep summary.
+        """
+        await self._workspace.broadcast(
+            WorkspaceEvent(
+                module="sleep",
+                type=STATE_EVENT,
+                payload={
+                    "tick": self._tick,
+                    "drives": [],
+                    "mood": None,
+                    "goals": [],
+                    "interval": round(self._next_interval, 3),
+                    "sleep": self._sleep_block(asleep=asleep),
+                },
+            )
+        )
 
     # ── one tick ───────────────────────────────────────────────────────────────
 
@@ -387,6 +449,10 @@ class CognitiveCycle:
         await self._stage(ctx, "learn", self._learn)
         await self._stage(ctx, "state", self._broadcast_state)
 
+        if ctx.stage_errors:
+            # Count degraded ticks since the last sleep — the metacognition review
+            # window reads this ("my thinking degraded N times").
+            self._degraded_ticks += 1
         report = TickReport(
             tick=ctx.tick,
             percept_count=len(ctx.percepts),
@@ -522,6 +588,8 @@ class CognitiveCycle:
         if self._drives is not None:
             ctx.drives = list(await self._drives.step(ctx.events))
             ctx.urges = list(self._drives.urges(ctx.drives))
+            # Remember this tick's urges for the between-ticks sleep trigger (FC-7).
+            self._last_urges = ctx.urges
             await self._broadcast_drives(ctx)
 
         if self._affect is not None:
@@ -594,9 +662,19 @@ class CognitiveCycle:
                 "mood": self._mood_payload(ctx.mood) if ctx.mood is not None else None,
                 "goals": goals_to_payload([ctx.goal]) if ctx.goal is not None else [],
                 "interval": round(self._next_interval, 3),
+                "sleep": self._sleep_block(asleep=False),
             },
             stage="state",
         )
+
+    def _sleep_block(self, *, asleep: bool) -> dict[str, object]:
+        """The sleep status carried on every state snapshot (FC-8 consumers read this).
+
+        ``asleep`` is the live awake/asleep flag; ``last`` is a compact summary of the
+        most recent completed sleep (or ``None`` before the first), so the dashboard
+        and REPL can show "last sleep: consolidated N facts, self-model vN, ✓".
+        """
+        return {"asleep": asleep, "last": _sleep_summary(self._last_sleep)}
 
     @staticmethod
     def _mood_payload(mood: Mood) -> dict[str, object]:
@@ -754,3 +832,19 @@ class CognitiveCycle:
             if stage is not None:
                 ctx.stage_errors[stage] = f"broadcast failed: {exc}"
             _log.warning("cycle.broadcast.failed", event_type=event_type, error=str(exc))
+
+
+def _sleep_summary(report: SleepReport | None) -> dict[str, object] | None:
+    """A compact, stable summary of the last sleep for the state surface (FC-8)."""
+    if report is None:
+        return None
+    return {
+        "trigger": report.trigger,
+        "ended_at": report.ended_at.isoformat() if report.ended_at else None,
+        "facts_written": report.facts_written,
+        "episodes_decayed": report.episodes_decayed,
+        "facts_merged": report.facts_merged,
+        "self_model_version": report.self_model_version,
+        "self_check_ok": report.self_check_ok,
+        "degraded_stages": report.degraded_stages,
+    }

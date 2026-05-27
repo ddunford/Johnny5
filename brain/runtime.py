@@ -28,7 +28,14 @@ from brain.cycle import CognitiveCycle
 from brain.cycle_control import CycleControlListener
 from brain.drives.engine import DriveEngine
 from brain.llm.router import LLMRouter, build_router
+from brain.memory.consolidator import Consolidator
+from brain.memory.decay import MemoryDecay
+from brain.memory.semantic import SemanticMemory
+from brain.memory.snapshot import MemorySnapshot
 from brain.memory.working import WorkingMemory
+from brain.metacognition.agent import Metacognition
+from brain.self_model.agent import SelfModel
+from brain.sleep import SleepCycle
 from brain.workspace import Workspace
 from foundation.config import Settings
 from foundation.observability import get_logger
@@ -133,6 +140,19 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
     recaller = MemoryRecaller()
     learner = EpisodicLearner()
 
+    # Sleep — the offline growth phase the run loop enters between ticks (FC-7). It
+    # shares the one DriveEngine so restore-energy/persistence land on live state,
+    # and the cloud-first consolidation/self_model/metacognition roles go through the
+    # same router (FC-4). Bounded: the Consolidator caps LLM calls per sleep.
+    sleep_cycle = SleepCycle(
+        consolidator=Consolidator(SemanticMemory(), router=router),
+        decay=MemoryDecay(),
+        self_model=SelfModel(router),
+        metacognition=Metacognition(router),
+        snapshot=MemorySnapshot(working=working_memory),
+        drives=drives,
+    )
+
     cycle = CognitiveCycle(
         workspace,
         perception=sensorium,
@@ -143,6 +163,7 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
         drives=drives,
         affect=affect,
         deliberation=deliberation,
+        sleep_cycle=sleep_cycle,
         working_memory=working_memory,
         interval_seconds=settings.cycle_base_interval_seconds,
         min_interval_seconds=settings.cycle_min_interval_seconds,

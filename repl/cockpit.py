@@ -16,6 +16,9 @@ from typing import Any, cast
 from brain.agents.sensorium import InputQueue
 from brain.cycle import STATE_EVENT
 from brain.cycle_control import PAUSE, RESUME, STEP, send_control
+from brain.metacognition.store import MetacognitionStore
+from brain.self_model.store import IdentityStore
+from brain.sleep import SleepLogStore
 from brain.workspace import Workspace, WorkspaceEvent
 from foundation.redis_client import close_redis
 
@@ -32,13 +35,17 @@ _BANNER = """\
 │  You're watching his stream of consciousness, live.
 │  Type a message + Enter to speak to him. Slash commands:
 │    /dump    show the current workspace + recent thoughts
-│    /state   show drive bars, mood, and active goal(s)
+│    /state   show drive bars, mood, active goal(s), sleep status
+│    /self    his self-model, latest reflection, and last sleep
 │    /pause   pause the heartbeat      /resume  resume it
 │    /step    run exactly one tick     /help    this list
 │    /quit    leave (Johnny keeps thinking)
 ╰────────────────────────────────────────────────────────────────────"""
 
-_HELP = "commands: <message> = speak · /dump · /state · /pause · /resume · /step · /help · /quit"
+_HELP = (
+    "commands: <message> = speak · /dump · /state · /self · "
+    "/pause · /resume · /step · /help · /quit"
+)
 
 
 class Cockpit:
@@ -102,6 +109,8 @@ class Cockpit:
                 await self._dump()
             elif command == "/state":
                 await self._state()
+            elif command == "/self":
+                await self._self()
             elif command == "/pause":
                 await send_control(PAUSE)
                 print("⏸  paused", flush=True)
@@ -174,6 +183,68 @@ class Cockpit:
         interval = cast("float | None", payload.get("interval"))
         if interval is not None:
             print(f"├─ heartbeat interval: {interval:.2f}s", flush=True)
+
+        sleep = cast("dict[str, Any] | None", payload.get("sleep"))
+        if sleep is not None:
+            status = "😴 asleep" if sleep.get("asleep") else "awake"
+            last = cast("dict[str, Any] | None", sleep.get("last"))
+            if last:
+                check = "✓" if last.get("self_check_ok") else "✗"
+                print(
+                    f"├─ sleep: {status}  (last: {last.get('facts_written', 0)} facts, "
+                    f"self-model v{last.get('self_model_version')}, wake-check {check})",
+                    flush=True,
+                )
+            else:
+                print(f"├─ sleep: {status}  (hasn't slept yet)", flush=True)
+        print("└──────────────────────────────────", flush=True)
+
+    async def _self(self) -> None:
+        """Render Johnny's current self-model, latest reflection, and last sleep.
+
+        Reads the growth stores directly (the cockpit shares the app DB env) — this
+        is the introspection view onto who he's becoming (``SPEC §11.4``).
+        """
+        identity = await IdentityStore().current()
+        notes = await MetacognitionStore().recent(1)
+        last_sleep = await SleepLogStore().latest()
+
+        print("┌─ self-model ─", flush=True)
+        if identity is None:
+            print("│  (no self-model yet)", flush=True)
+        else:
+            print(f"│  {identity.name}  ·  version {identity.version}", flush=True)
+            print(f"│  {identity.self_model_doc}", flush=True)
+            if identity.values:
+                print(f"│  values: {', '.join(identity.values)}", flush=True)
+            if identity.concerns:
+                print(f"│  concerns: {', '.join(identity.concerns)}", flush=True)
+            for person, rel in identity.relationships.items():
+                print(f"│  {person}: {rel}", flush=True)
+
+        print("├─ latest reflection:", flush=True)
+        if notes:
+            note = notes[0]
+            reflection = note.source.get("reflection") if isinstance(note.source, dict) else None
+            if reflection:
+                print(f"│  {reflection}", flush=True)
+            print(f"│  ◆ {note.observation} → {note.proposal}", flush=True)
+        else:
+            print("│  (none yet)", flush=True)
+
+        print("├─ last sleep:", flush=True)
+        if last_sleep is None:
+            print("│  (hasn't slept yet)", flush=True)
+        else:
+            check = "✓" if last_sleep.self_check_ok else "✗"
+            print(
+                f"│  trigger {last_sleep.trigger} · {last_sleep.facts_written} facts · "
+                f"{last_sleep.episodes_decayed} decayed · {last_sleep.facts_merged} merged · "
+                f"self-model v{last_sleep.self_model_version} · wake-check {check}",
+                flush=True,
+            )
+            if last_sleep.notes.get("degraded"):
+                print(f"│  degraded stages: {last_sleep.notes.get('degraded')}", flush=True)
         print("└──────────────────────────────────", flush=True)
 
     @staticmethod

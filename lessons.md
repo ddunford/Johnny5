@@ -1,5 +1,8 @@
 # Lessons
 
+### Teammates never run destructive git on the shared working tree (single-committer model)
+In a `/team-execute` run the lead is the SOLE committer; teammates implement + report, the lead commits. A teammate must therefore never run `git checkout`/`restore`/`reset`/`clean` (or any tree-mutating git) on the shared working tree — not even to "revert" their own work. The lead may be holding uncommitted edits in those files, and a `git checkout HEAD -- <file>` would silently wipe them. In Phase 6a a teammate ran `git checkout HEAD -- <5 files>` to undo an addendum after a superseded ruling; it happened to be a no-op (the files were already committed) but it was a live risk. If something needs reverting, the teammate asks the lead to do it. (Spawn-prompt teammates with this explicitly.)
+
 ### Run `ruff format --check` before committing teammate code
 As the single-committer lead, a teammate reporting "ruff/mypy clean" usually means `ruff check` (lint) + `mypy`, NOT `ruff format`. They're separate gates and CI runs both. Phase 1 committed 5 `brain/memory/*.py` files that passed lint but failed `ruff format --check` (caught by qa, not at commit). Before each commit of teammate work, run `uv run ruff check . && uv run ruff format --check .` yourself — don't trust the "clean" report to cover formatting.
 

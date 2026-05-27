@@ -51,7 +51,7 @@ The substrate Johnny runs on. No cognition yet — this phase makes "the lights 
 - [x] `TASK-0.1` Scaffold FastAPI service (app package, pydantic-settings, async lifespan) and verify it boots → `/fastapi-engineer`
 - [ ] `TASK-0.2` ⫘ Docker: multi-stage Dockerfile + docker-compose (api, postgres+pgvector, redis) + Traefik labels + `.env`/`.env.testing` → `/devops-deployment-engineer`
 - [ ] `TASK-0.3` ⫘ Write `ctl.sh` (up/down/logs/migrate/test/shell/health/help; dev/prod aware) → `/devops-deployment-engineer`
-- [ ] `TASK-0.4` Alembic baseline + enable pgvector + `llm_call_log` migration → `/fastapi-engineer`
+- [x] `TASK-0.4` Alembic baseline + enable pgvector + `llm_call_log` migration → `/fastapi-engineer`
 - [ ] `TASK-0.5` Redis connection helper + ping; Postgres async session/repository base → `/fastapi-engineer`
 - [ ] `TASK-0.6` Implement LLM router: per-role provider chain, circuit breaker, retry-with-feedback, call logging → `/fastapi-engineer` [TC-0.3, TC-0.4]
 - [ ] `TASK-0.7` ⫘ Groq + Ollama provider adapters (OpenAI-compatible; gemma4 clean `content`; qwen3.5-9b reasoning-channel handling) → `/fastapi-engineer` [TC-0.3]

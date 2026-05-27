@@ -27,7 +27,11 @@ health_router = APIRouter(prefix="/api", tags=["health"])
 
 # Without these Johnny cannot operate; their failure makes the service unready.
 _CRITICAL = frozenset({"postgres", "redis"})
-_CHECK_TIMEOUT = 5.0
+# Short, independent of LOCAL_LLM_TIMEOUT: checks run concurrently, so the whole
+# endpoint returns within ~one timeout even with an upstream down — staying well
+# under a typical container healthcheck timeout so a "tired" upstream can't flap
+# the api container. These probes hit lightweight metadata/health routes only.
+_CHECK_TIMEOUT = 2.0
 
 
 class ComponentHealth(BaseModel):

@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     groq_model: str = Field(default="llama-3.3-70b-versatile")
     groq_daily_budget_usd: float = Field(default=5.00)
 
+    # ── LLM router tuning ──
+    llm_routes_path: str = Field(default="config/llm_routes.toml")
+    circuit_failure_threshold: int = Field(default=4)
+    circuit_reset_seconds: float = Field(default=60.0)
+    llm_schema_retries: int = Field(default=1)
+
     # ── Interfaces ──
     public_domain: str = Field(default="johnny.demosrv.uk")
     web_port: int = Field(default=80)

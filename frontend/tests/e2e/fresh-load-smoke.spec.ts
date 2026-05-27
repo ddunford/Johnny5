@@ -29,7 +29,7 @@ test.describe("fresh-load smoke · empty Johnny", () => {
     for (const panel of PANELS) {
       await gotoApp(page, panel.path);
       await expect(
-        page.getByRole("heading", { name: panel.heading }),
+        page.getByRole("heading", { name: panel.heading, exact: true }),
         `${panel.label} must render its heading (not a blank screen)`,
       ).toBeVisible();
     }

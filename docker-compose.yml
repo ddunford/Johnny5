@@ -38,11 +38,53 @@ services:
     labels:
       traefik.enable: "true"
       traefik.docker.network: "${TRAEFIK_NETWORK:-traefik_demosrv}"
-      traefik.http.routers.johnny5-api.rule: "Host(`${PUBLIC_DOMAIN:-johnny.demosrv.uk}`)"
+      # API + WebSocket paths only — these must win over the SPA `/` catch-all,
+      # so this router carries the higher priority. The `web` service owns `/`.
+      traefik.http.routers.johnny5-api.rule: "Host(`${PUBLIC_DOMAIN:-johnny.demosrv.uk}`) && (PathPrefix(`/api`) || PathPrefix(`/ws`))"
+      traefik.http.routers.johnny5-api.priority: "100"
       traefik.http.routers.johnny5-api.entrypoints: "websecure"
       traefik.http.routers.johnny5-api.tls.certresolver: "${TRAEFIK_CERTRESOLVER:-le}"
       traefik.http.routers.johnny5-api.service: "johnny5-api"
+      traefik.http.routers.johnny5-api.middlewares: "johnny5-hsts@docker"
       traefik.http.services.johnny5-api.loadbalancer.server.port: "8000"
+      # HSTS at the TLS edge. Defined here on the always-on api service; the web
+      # router references the same middleware. App-level security headers (CSP,
+      # X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy) are set by
+      # nginx on the web service — HSTS is the one header we keep at the edge.
+      traefik.http.middlewares.johnny5-hsts.headers.stsSeconds: "63072000"
+      traefik.http.middlewares.johnny5-hsts.headers.stsIncludeSubdomains: "true"
+
+  # Web UI — nginx serving the Vite production build. Static only; it talks to
+  # nothing internal. Traefik sends `/` here (the SPA, with try_files fallback)
+  # and `/api` + `/ws` to the api service above.
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: johnny5-web:latest
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 4s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - edge
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: "${TRAEFIK_NETWORK:-traefik_demosrv}"
+      # SPA catch-all: everything that isn't matched by the higher-priority
+      # api router (i.e. not /api or /ws). Lower priority so the API/WS win.
+      traefik.http.routers.johnny5-web.rule: "Host(`${PUBLIC_DOMAIN:-johnny.demosrv.uk}`)"
+      traefik.http.routers.johnny5-web.priority: "1"
+      traefik.http.routers.johnny5-web.entrypoints: "websecure"
+      traefik.http.routers.johnny5-web.tls.certresolver: "${TRAEFIK_CERTRESOLVER:-le}"
+      traefik.http.routers.johnny5-web.service: "johnny5-web"
+      traefik.http.routers.johnny5-web.middlewares: "johnny5-hsts@docker"
+      traefik.http.services.johnny5-web.loadbalancer.server.port: "80"
 
   postgres:
     image: pgvector/pgvector:pg16

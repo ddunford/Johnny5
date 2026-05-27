@@ -10,9 +10,22 @@ services:
     build:
       target: development
     image: johnny5-api:dev
-    command: ["uvicorn", "johnny.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    # --reload watches only the Python source. The whole repo is mounted at
+    # /app, which now also holds pgdata/, redisdata/ (live datastore writes) and
+    # frontend/ (SPA source churn) — watching those caused an endless
+    # reload loop that left the api perpetually unhealthy. Scope to the app
+    # packages so the reloader only fires on real backend code changes.
+    command: ["uvicorn", "johnny.main:app", "--host", "0.0.0.0", "--port", "8000",
+              "--reload",
+              "--reload-dir", "johnny", "--reload-dir", "brain",
+              "--reload-dir", "core", "--reload-dir", "foundation"]
     environment:
       APP_ENV: development
+    # Publish the API to the host (localhost only) so the Vite dev server
+    # (`npm run dev` in frontend/) can proxy /api + /ws to the live backend.
+    # Bound to 127.0.0.1 — never exposed to the LAN; prod reaches it via Traefik.
+    ports:
+      - "127.0.0.1:8000:8000"
     volumes:
       - .:/app
       - /app/.venv

@@ -110,11 +110,14 @@ ensure_test_db() {
 
 cmd_up() {            # Build if needed and start the stack
     log_info "Starting stack ($([ "$PRODUCTION_MODE" = true ] && echo production || echo development))..."
+    # `dc up -d` builds any missing image — including the web SPA image
+    # (multi-stage: vite build -> nginx) on first run.
     dc up -d "$@"
     wait_for_healthy postgres
     wait_for_healthy redis
     wait_for_healthy api || { log_error "API failed health check."; exit 1; }
-    log_success "Stack up. Health: GET /api/health (./ctl.sh health)."
+    wait_for_healthy web || { log_error "Web (SPA) failed health check."; exit 1; }
+    log_success "Stack up. UI: https://${PUBLIC_DOMAIN:-johnny.demosrv.uk}/  |  Health: ./ctl.sh health"
 }
 
 cmd_down() {          # Stop and remove containers (data volumes kept)
@@ -235,6 +238,12 @@ $(printf '%bApp / data%b' "$GREEN" "$NC")
   reset              Wipe all data and start fresh              ${DIM}(dev only)${NC}
 
   help               Show this message
+
+$(printf '%bWeb UI%b' "$GREEN" "$NC")
+  The 'web' service (nginx) serves the built SPA at https://${PUBLIC_DOMAIN:-johnny.demosrv.uk}/.
+  'up' builds its image on first run; 'rebuild web' rebuilds after frontend changes.
+  ${DIM}Live frontend dev (HMR): cd frontend && npm run dev — Vite proxies /api + /ws${NC}
+  ${DIM}to the api container via the localhost:8000 port published in dev mode.${NC}
 
 $(printf '%bMode:%b' "$YELLOW" "$NC") $([ "$PRODUCTION_MODE" = true ] && echo production || echo development)  ${DIM}(set via .production marker or PRODUCTION_MODE=true)${NC}
 EOF

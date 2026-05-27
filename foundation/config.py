@@ -96,6 +96,17 @@ class Settings(BaseSettings):
     # bottleneck bound (LIDA/GWT: a wider workspace degrades, not improves).
     workspace_capacity: int = Field(default=7)
 
+    # ── Sensorium (perception) ──
+    # An incoming message is a high-salience interrupt that wins attention; the
+    # ambient system-metrics percept sits low so it only surfaces when idle (which
+    # is what makes the "need input" character beat emerge). Tunable (FC-3).
+    sensorium_input_salience: float = Field(default=0.85)
+    sensorium_ambient_salience: float = Field(default=0.15)
+    # The ambient system percept is sampled every tick (so the workspace is never
+    # empty) but only *persisted* every N ticks, so an idle Johnny doesn't flood
+    # the percept log with "nothing happened" rows (Phase 4 sleep prunes the rest).
+    sensorium_ambient_persist_every_ticks: int = Field(default=15)
+
     # ── Interfaces ──
     public_domain: str = Field(default="johnny.demosrv.uk")
     web_port: int = Field(default=80)

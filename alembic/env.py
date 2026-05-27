@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # Import model modules so their tables register on Base.metadata. Add new model
 # modules here as subsystems land (memory stores, etc.).
+import brain.agents.sensorium  # noqa: F401
 import brain.llm.call_log  # noqa: F401
 import brain.memory.episodic  # noqa: F401
 import brain.memory.procedural  # noqa: F401

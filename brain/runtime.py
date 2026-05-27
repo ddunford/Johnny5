@@ -28,6 +28,7 @@ from brain.agents.sensorium import InputQueue, Sensorium
 from brain.cycle import CognitiveCycle
 from brain.cycle_control import CycleControlListener
 from brain.drives.engine import DriveEngine
+from brain.effectors.action_log import ActionAuditReader
 from brain.effectors.dispatch import EffectorDispatch
 from brain.effectors.tools import default_tool_registry
 from brain.goals.store import GoalStore
@@ -75,6 +76,7 @@ class CognitiveRuntime:
         semantic: SemanticMemory,
         identity: IdentityStore,
         metacognition: MetacognitionStore,
+        action_audit: ActionAuditReader,
     ) -> None:
         self.workspace = workspace
         self.registry = registry
@@ -91,6 +93,7 @@ class CognitiveRuntime:
         self.semantic = semantic
         self.identity = identity
         self.metacognition = metacognition
+        self.action_audit = action_audit
         self._control = CycleControlListener(cycle)
         self._bus_task: asyncio.Task[None] | None = None
         self._cycle_task: asyncio.Task[None] | None = None
@@ -261,6 +264,8 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
     api_semantic = SemanticMemory()
     api_identity = IdentityStore()
     api_metacognition = MetacognitionStore()
+    # Read facade over the durable action_log trail (GET /api/v1/audit/actions).
+    api_action_audit = ActionAuditReader()
 
     return CognitiveRuntime(
         workspace=workspace,
@@ -278,4 +283,5 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
         semantic=api_semantic,
         identity=api_identity,
         metacognition=api_metacognition,
+        action_audit=api_action_audit,
     )

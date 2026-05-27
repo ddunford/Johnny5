@@ -22,7 +22,7 @@ def get_runtime(request: Request) -> Any:
     ``CognitiveRuntime`` and the lightweight namespaces test apps attach; the route
     handlers access only the documented read surface (``workspace``, ``drives``,
     ``affect``, ``goals``, ``sleep``, ``episodic``, ``semantic``, ``identity``,
-    ``metacognition``, ``cycle``, ``input_queue``).
+    ``metacognition``, ``action_audit``, ``cycle``, ``input_queue``).
     """
     runtime = getattr(request.app.state, "runtime", None)
     if runtime is None:

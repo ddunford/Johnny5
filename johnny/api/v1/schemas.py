@@ -153,6 +153,32 @@ class AuditResponse(BaseModel):
     events: list[AuditEvent] = Field(default_factory=list)
 
 
+class ActionAudit(BaseModel):
+    """One durable ``action_log`` row — the Core-written effector-action trail.
+
+    Distinct from a bus ``AuditEvent``: this is the trustworthy, append-only record
+    the Core writes for every dispatched OR vetoed tool action (``SPEC §9.3``), so
+    it survives even a misbehaving Mind. ``result`` is ``None`` on a veto (the tool
+    never ran); ``veto_reason`` is set only on a veto.
+    """
+
+    id: int | None = None
+    ts: str | None = None
+    tool: str
+    args: dict[str, object] = Field(default_factory=dict)
+    result: dict[str, object] | None = None
+    conscience_verdict: str
+    veto_reason: str | None = None
+    goal_id: int | None = None
+    success: bool
+
+
+class ActionAuditResponse(BaseModel):
+    """Recent durable actions, newest first (projection of the ``action_log`` trail)."""
+
+    actions: list[ActionAudit] = Field(default_factory=list)
+
+
 # ── GET /memory/episodes ───────────────────────────────────────────────────────
 
 

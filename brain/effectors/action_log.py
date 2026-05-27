@@ -24,7 +24,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
-from foundation.db import Base
+from foundation.db import Base, session_scope
 
 # The physical table name. The Core's AuditWriter writes to this name without
 # importing this module (FC-1); keep the two in sync if it ever changes.
@@ -89,3 +89,21 @@ class ActionLogRepository:
             stmt = stmt.where(ActionLogRow.conscience_verdict == verdict_filter)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+
+class ActionAuditReader:
+    """Read facade over ``action_log`` for the API (opens its own session).
+
+    The composition root wires one of these as a runtime read store (like the
+    memory/identity readers), so ``GET /api/v1/audit/actions`` can surface the
+    durable, Core-written action trail without per-request session wiring. Still
+    read-only (FC-1) — it reads through ``ActionLogRepository``, which has no
+    write/mutate path.
+    """
+
+    async def recent(
+        self, limit: int = 100, *, verdict_filter: str | None = None
+    ) -> list[ActionLogRow]:
+        """Most-recent durable actions first (optionally filtered to allow/veto)."""
+        async with session_scope() as session:
+            return await ActionLogRepository(session).recent(limit, verdict_filter=verdict_filter)

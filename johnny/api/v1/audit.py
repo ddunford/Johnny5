@@ -14,8 +14,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query
 
+from foundation.redaction import redact_payload
 from johnny.api.v1.deps import RuntimeDep
-from johnny.api.v1.schemas import AuditEvent, AuditResponse
+from johnny.api.v1.schemas import (
+    ActionAudit,
+    ActionAuditResponse,
+    AuditEvent,
+    AuditResponse,
+)
 
 router = APIRouter(tags=["audit"])
 
@@ -38,5 +44,38 @@ async def get_audit(
                 payload=dict(event.payload),
             )
             for event in events
+        ]
+    )
+
+
+@router.get("/audit/actions", response_model=ActionAuditResponse)
+async def get_audit_actions(
+    runtime: RuntimeDep,
+    limit: int = Query(default=100, ge=1, le=500, description="Max actions to return."),
+    verdict: str | None = Query(default=None, description="Filter to 'allow' or 'veto'."),
+) -> ActionAuditResponse:
+    """The durable, Core-written ``action_log`` trail — every dispatched/vetoed action.
+
+    Distinct from ``/audit`` (the Mind's bus log): this is the trustworthy record
+    (``SPEC §9.3``) the Core appends, so it stays truthful even if the Mind misbehaves
+    — which is why it's surfaced, not write-only. Args/result are re-run through the
+    redaction guard on the way out (defense in depth; they were already redacted at
+    write, and the marker is idempotent).
+    """
+    rows = await runtime.action_audit.recent(limit, verdict_filter=verdict)
+    return ActionAuditResponse(
+        actions=[
+            ActionAudit(
+                id=row.id,
+                ts=row.ts.isoformat() if row.ts else None,
+                tool=row.tool,
+                args=redact_payload(row.args),
+                result=redact_payload(row.result) if row.result is not None else None,
+                conscience_verdict=row.conscience_verdict,
+                veto_reason=row.veto_reason,
+                goal_id=row.goal_id,
+                success=row.success,
+            )
+            for row in rows
         ]
     )

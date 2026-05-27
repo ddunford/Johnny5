@@ -49,7 +49,7 @@ Working memory is **Redis** (bounded, TTL/decay), not a table.
 
 - [x] `TASK-1.1` Migrations: `episode`, `semantic_fact`, `semantic_edge`, `skill` + vector indexes → `/fastapi-engineer`
 - [x] `TASK-1.2` Episodic memory: write path + hybrid recall (similarity×recency×salience) → `/fastapi-engineer` [TC-1.1, TC-1.2]
-- [ ] `TASK-1.3` ⫘ Semantic memory: fact upsert, recall, edge linking → `/fastapi-engineer` [TC-1.3]
+- [x] `TASK-1.3` ⫘ Semantic memory: fact upsert, recall, edge linking → `/fastapi-engineer` [TC-1.3]
 - [ ] `TASK-1.4` ⫘ Procedural memory: skill store/find/reinforce → `/fastapi-engineer` [TC-1.4]
 - [ ] `TASK-1.5` Working memory (Redis): bounded buffer, decay, salience eviction → `/fastapi-engineer` [TC-1.5]
 - [ ] `TASK-1.6` Consolidator stub: interface + naive episodic→semantic pass → `/fastapi-engineer` [TC-1.6]

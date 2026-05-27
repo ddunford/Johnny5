@@ -136,6 +136,20 @@ class Settings(BaseSettings):
     # floor, 1024 leaves headroom). Tunable (FC-3).
     narrator_max_tokens: int = Field(default=1024)
 
+    # ── Affect (appraisal → mood, SPEC §6.2) ──
+    # Token ceiling for an LLM appraisal of a significant event. gemma4 emits a
+    # reasoning preamble before the JSON (the lessons.md trap), so this must clear
+    # the preamble + the small appraisal object — 512 leaves headroom. Tunable (FC-3).
+    affect_max_tokens: int = Field(default=512)
+    # A feeling fades: mood deviation from the calm baseline halves every this many
+    # seconds when nothing sustains it (so an excited spike mellows on its own).
+    mood_halflife_seconds: float = Field(default=180.0)
+    # Fraction of an appraisal's push applied per tick — mood moves, doesn't snap.
+    mood_responsiveness: float = Field(default=0.5)
+    # A new mood row is written only when |Δvalence|+|Δarousal| clears this (or the
+    # emotion set changes), so the mood history records shifts, not every idle tick.
+    mood_persist_min_change: float = Field(default=0.04)
+
     # ── Memory wiring into the cycle (recall + learn stages) ──
     # How many episodes / facts recall pulls into the workspace each tick.
     memory_recall_episodes_k: int = Field(default=3)

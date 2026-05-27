@@ -6,8 +6,7 @@ Single source of truth for open work, in order. Move items between sections; del
 
 ## In progress
 
-### Phase 1 — Memory spine  →  `plan/phase-1-memory-spine.md`  ⟵ team `johnny5-phase-1`
-Four memory stores (working/episodic/semantic/procedural), embedding-based hybrid recall, episodic write path, consolidation stub. No cognition yet — a memory you can write to and query. **Done = Johnny can remember and recall.**
+_(none — Phase 1 complete 2026-05-27; Phase 2 is next)_
 
 ## Next
 

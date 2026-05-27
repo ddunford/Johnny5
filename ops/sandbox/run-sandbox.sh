@@ -8,6 +8,12 @@
 # security review) so the boundary is in one place — the calling tool never has
 # to be trusted to pass the right flags.
 #
+# Docker access: honours $DOCKER_HOST. In the stack the api points it at the
+# scoped docker-socket-proxy (DOCKER_HOST=tcp://docker-proxy:2375), so the api
+# never holds the raw socket. The flow uses ONLY create / start / wait / logs /
+# rm + image-inspect — the proxy's allowlist — and runs the container DETACHED,
+# passing the snippet via an env var so it never needs the attach/exec endpoints.
+#
 # Contract (see ops/sandbox/README.md):
 #   stdin  : UTF-8 Python source (the snippet to run)
 #   stdout : one line of JSON —
@@ -16,15 +22,15 @@
 #            timeout/kill — all are valid verdicts). Non-zero (3) only on
 #            launcher INFRA failure (docker/image unavailable), still with JSON.
 #
-# Tunables (env): SANDBOX_IMAGE, SANDBOX_TIMEOUT (also $1), SANDBOX_MEMORY,
-#   SANDBOX_CPUS, SANDBOX_PIDS, SANDBOX_OUTPUT_MAX.
+# Tunables (env): SANDBOX_IMAGE, SANDBOX_TIMEOUT (also $1), SANDBOX_GRACE,
+#   SANDBOX_MEMORY, SANDBOX_CPUS, SANDBOX_PIDS, SANDBOX_OUTPUT_MAX.
 
 set -uo pipefail
 
 IMAGE="${SANDBOX_IMAGE:-johnny5-sandbox:latest}"
 TIMEOUT="${1:-${SANDBOX_TIMEOUT:-10}}"     # in-container graceful timeout (seconds)
-GRACE="${SANDBOX_GRACE:-5}"                # extra seconds before the launcher's hard SIGKILL backstop
-HARD=$((TIMEOUT + GRACE))                  # launcher backstop: fires only if the runner is wedged
+GRACE="${SANDBOX_GRACE:-5}"                # extra seconds before the launcher's hard backstop
+HARD=$((TIMEOUT + GRACE))                  # backstop: fires only if the in-container guard is wedged
 MEMORY="${SANDBOX_MEMORY:-256m}"
 CPUS="${SANDBOX_CPUS:-1.0}"
 PIDS="${SANDBOX_PIDS:-128}"
@@ -39,17 +45,22 @@ command -v docker >/dev/null 2>&1 || {
     emit_infra_error "SandboxUnavailable" "docker CLI not available to the launcher" 127
     exit 3
 }
+# Image inspect (GET /images/.../json) — also confirms the image is present so a
+# detached run never silently tries to pull (pull is off the proxy allowlist).
 docker image inspect "$IMAGE" >/dev/null 2>&1 || {
     emit_infra_error "SandboxUnavailable" "sandbox image ${IMAGE} missing — run ./ctl.sh sandbox-build" 125
     exit 3
 }
 
+# Read the snippet and hand it to the container via env (base64) — keeps the run
+# detached (no attach endpoint) and immune to shell/CLI interpretation.
+src="$(cat)"
+code_b64="$(printf '%s' "$src" | base64 -w0)"
+
 name="johnny5-sandbox-$$-${RANDOM}-$(date +%s%N)"
 out="$(mktemp)"
 err="$(mktemp)"
 cleanup() {
-    # `--rm` covers the clean path; this also reaps a container left behind if the
-    # launcher (or its `timeout`) is killed before docker could remove it.
     docker rm -f "$name" >/dev/null 2>&1 || true
     rm -f "$out" "$err"
 }
@@ -63,16 +74,10 @@ trap cleanup EXIT INT TERM
 # --user 65534:65534  : nobody:nogroup — never root, even if the image USER changed
 # --memory/--cpus/--pids-limit : resource caps (OOM-kill, throttle, fork-bomb cap)
 # --ipc none / --cgroupns private : namespace isolation
-# timeout --signal=KILL "${HARD}s" : backstop SIGKILL if the in-container guard
-#   is wedged (e.g. a C-level loop ignoring signals). The runner's own SANDBOX_RUN
-#   _TIMEOUT (= $TIMEOUT) normally fires first and yields a graceful verdict; this
-#   only bites GRACE seconds later.
-# The group's `2>/dev/null` swallows the shell's own job-termination notice
-# ("…: Killed") when the container is SIGKILLed; docker's real stdout/stderr are
-# captured by the inner redirections to $out/$err and are unaffected.
-t0="$(date +%s%3N)"
-{ timeout --signal=KILL "${HARD}s" \
-    docker run --rm --name "$name" \
+# (no bind mounts: the container can't see the repo, .env, or data/)
+# All of the above are create-time HostConfig options, forwarded verbatim through
+# the proxy's /containers/create — the proxy never strips them.
+if ! docker run -d --name "$name" \
         --network none \
         --memory "$MEMORY" --memory-swap "$MEMORY" --memory-swappiness 0 \
         --cpus "$CPUS" \
@@ -84,44 +89,56 @@ t0="$(date +%s%3N)"
         --security-opt no-new-privileges \
         --ipc none \
         --cgroupns private \
-        -i \
+        -e SANDBOX_CODE_B64="$code_b64" \
         -e SANDBOX_RUN_TIMEOUT="$TIMEOUT" \
         -e SANDBOX_OUTPUT_MAX="$OUTPUT_MAX" \
-        "$IMAGE" >"$out" 2>"$err"; rc=$?; } 2>/dev/null
-elapsed="$(( $(date +%s%3N) - t0 ))"
-
-# Happy / user-error / graceful-timeout path: the runner ran to completion and
-# emitted its JSON verdict (it exits 0 even for user exceptions and its OWN
-# in-container timeout). Pass that authoritative verdict straight through.
-if [ "$rc" -eq 0 ] && [ -s "$out" ]; then
-    cat "$out"
-    exit 0
+        "$IMAGE" >/dev/null 2>"$err"; then
+    errtext="$(head -c 1500 "$err" 2>/dev/null | tr '\n\r\t' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g')"
+    emit_infra_error "SandboxUnavailable" "failed to start sandbox: ${errtext}" 125
+    exit 3
 fi
 
-# rc != 0 ⇒ the container was killed externally (our backstop) or died on its own
-# (kernel OOM-killer for the memory cap, pids cap, or a crash). The runner never
-# got to emit. Disambiguate by how long it ran: a kill at/near the hard backstop
-# is a (wedged) timeout; a kill well before it is a resource/OOM kill.
-docker rm -f "$name" >/dev/null 2>&1 || true
-if [ "$rc" -eq 124 ] || { { [ "$rc" -eq 137 ] || [ "$rc" -eq 139 ]; } && [ "$elapsed" -ge "$(( HARD * 1000 - 750 ))" ]; }; then
+# Block until exit, with a hard backstop. `docker wait` prints the container's
+# exit code and returns it. If the backstop fires it kills the WAIT (not the
+# container) → $ec is empty → we force-remove the wedged container. The group's
+# 2>/dev/null swallows the shell's "Killed" job notice if the wait is SIGKILLed.
+t0="$(date +%s%3N)"
+ec="$( { timeout --signal=KILL "${HARD}s" docker wait "$name"; } 2>/dev/null )"
+elapsed="$(( $(date +%s%3N) - t0 ))"
+
+if [ -z "$ec" ]; then
+    # Backstop fired: the in-container guard was wedged (e.g. a C-level loop).
+    docker rm -f "$name" >/dev/null 2>&1 || true
     printf '{"ok":false,"timed_out":true,"exit_code":124,"stdout":"","stderr":"killed: wedged past the %ss limit (hard backstop)","error":{"type":"Timeout","message":"sandbox exceeded its %ss limit and was force-killed"},"duration_ms":%s}\n' \
         "$TIMEOUT" "$TIMEOUT" "$elapsed"
     exit 0
 fi
-if [ "$rc" -eq 137 ] || [ "$rc" -eq 139 ]; then
-    printf '{"ok":false,"timed_out":false,"exit_code":%s,"stdout":"","stderr":"killed by SIGKILL — memory (OOM) or resource cap","error":{"type":"Killed","message":"sandbox terminated by the kernel resource guard (memory/pids/cpu cap)"},"duration_ms":%s}\n' \
-        "$rc" "$elapsed"
+
+# Container exited on its own. Pull its captured streams — container stdout (the
+# runner's verdict) → $out, container stderr → $err — then remove it.
+docker logs "$name" >"$out" 2>"$err"
+docker rm -f "$name" >/dev/null 2>&1 || true
+
+# The runner exits 0 whenever it ran to completion (success, user exception, or
+# its OWN in-container timeout — all encoded in the verdict JSON). A non-zero
+# container exit means the kernel killed it before it could emit: 137 = SIGKILL
+# (OOM / pids / cpu cap), 139 = SIGSEGV.
+if [ "$ec" = "0" ] && [ -s "$out" ]; then
+    cat "$out"
     exit 0
 fi
-
-# Some other non-zero rc but the runner still left a verdict — trust it.
+if [ "$ec" = "137" ] || [ "$ec" = "139" ]; then
+    printf '{"ok":false,"timed_out":false,"exit_code":%s,"stdout":"","stderr":"killed by SIGKILL — memory (OOM) or resource cap","error":{"type":"Killed","message":"sandbox terminated by the kernel resource guard (memory/pids/cpu cap)"},"duration_ms":%s}\n' \
+        "$ec" "$elapsed"
+    exit 0
+fi
+# Non-zero exit but the runner still left a verdict — trust it.
 if [ -s "$out" ]; then
     cat "$out"
     exit 0
 fi
-
-# Runner crashed before emitting (should be near-impossible). Surface stderr.
+# No verdict at all (near-impossible). Surface stderr for diagnosis.
 errtext="$(head -c 1500 "$err" 2>/dev/null | tr '\n\r\t' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g')"
-printf '{"ok":false,"timed_out":false,"exit_code":%s,"stdout":"","stderr":"%s","error":{"type":"SandboxError","message":"runner produced no verdict (rc=%s)"},"duration_ms":0}\n' \
-    "$rc" "$errtext" "$rc"
+printf '{"ok":false,"timed_out":false,"exit_code":%s,"stdout":"","stderr":"%s","error":{"type":"SandboxError","message":"runner produced no verdict (exit=%s)"},"duration_ms":%s}\n' \
+    "$ec" "$errtext" "$ec" "$elapsed"
 exit 0

@@ -19,6 +19,13 @@ ARG UV_VERSION=0.5
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
 # ---------------------------------------------------------------------------
+# dockercli — the Docker CLI binary only (client, no daemon). The code_exec
+# launcher uses it to talk to the SCOPED docker-socket-proxy via $DOCKER_HOST.
+# Our images never mount the raw socket — least privilege (see ops/sandbox/).
+# ---------------------------------------------------------------------------
+FROM docker:27-cli AS dockercli
+
+# ---------------------------------------------------------------------------
 # base — Python + uv + shared environment. Source of every other stage.
 # ---------------------------------------------------------------------------
 FROM python:${PYTHON_VERSION}-slim-bookworm AS base
@@ -63,6 +70,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ---------------------------------------------------------------------------
 FROM builder-dev AS development
 ENV APP_ENV=development
+# Docker CLI (client only) for the code_exec launcher → docker-socket-proxy.
+COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 EXPOSE 8000
 CMD ["uvicorn", "johnny.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
@@ -78,6 +87,8 @@ ENV PYTHONUNBUFFERED=1 \
     HOME=/app \
     PATH="/app/.venv/bin:$PATH"
 COPY --from=uv /uv /uvx /bin/
+# Docker CLI (client only) for the code_exec launcher → docker-socket-proxy.
+COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 RUN groupadd --system --gid 10001 johnny \
  && useradd --system --uid 10001 --gid johnny --home-dir /app --no-create-home johnny
 WORKDIR /app

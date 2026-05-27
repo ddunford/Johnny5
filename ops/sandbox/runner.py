@@ -19,6 +19,7 @@ Stdlib only — the image carries nothing else.
 
 from __future__ import annotations
 
+import base64
 import builtins
 import contextlib
 import json
@@ -66,6 +67,19 @@ def _set_resource_limits() -> None:
             resource.setrlimit(res, (soft, hard))
 
 
+def _read_source() -> str:
+    """The snippet, from ``SANDBOX_CODE_B64`` (base64) if set, else stdin.
+
+    The launcher passes code via env so it can run the container DETACHED and
+    never needs the Docker attach/exec endpoints (kept off the socket-proxy
+    allowlist). Stdin remains a fallback for direct ``docker run -i`` debugging.
+    """
+    b64 = os.environ.get("SANDBOX_CODE_B64")
+    if b64:
+        return base64.b64decode(b64).decode("utf-8", "replace")
+    return sys.stdin.buffer.read().decode("utf-8", "replace")
+
+
 def _read_capped(fobj: BinaryIO) -> tuple[str, bool]:
     fobj.flush()
     fobj.seek(0)
@@ -78,7 +92,7 @@ def _read_capped(fobj: BinaryIO) -> tuple[str, bool]:
 
 
 def main() -> None:
-    source = sys.stdin.buffer.read().decode("utf-8", "replace")
+    source = _read_source()
 
     result: dict = {
         "ok": True,

@@ -11,7 +11,7 @@ and reads a verdict out via the launcher below.
 | File | Owner | Purpose |
 |------|-------|---------|
 | `Dockerfile` | devops | The minimal `johnny5-sandbox` image: `python:3.12-slim`, non-root, no project code, no secrets, only `runner.py`. |
-| `runner.py` | devops | In-container entrypoint. Reads code on stdin, runs it, emits one JSON verdict. Captures stdout/stderr at the fd level, bounds output, enforces an in-container timeout, always emits a well-formed verdict. |
+| `runner.py` | devops | In-container entrypoint. Reads code from `SANDBOX_CODE_B64` (env, base64; stdin fallback), runs it, emits one JSON verdict. Captures stdout/stderr at the fd level, bounds output, enforces an in-container timeout, always emits a well-formed verdict. |
 | `run-sandbox.sh` | devops | **The security boundary.** Wraps `docker run` with every hardening flag. The tool calls THIS — it never issues `docker` itself. |
 
 Build / verify with the control script:
@@ -100,11 +100,39 @@ non-root; sees only the container fs (not the host); rootfs read-only; `/tmp`
 writable; network cut; infinite loop killed; memory cap OOM-kills; thread/pid
 fan-out capped.
 
-## Open integration point — how the api reaches Docker
+## How the api reaches Docker — the scoped socket-proxy
 
-`run-sandbox.sh` needs a Docker endpoint. The api runs in a container with **no
-docker CLI and no socket** today. Transport options (pending a lead decision):
-DooD (mount `/var/run/docker.sock` + add the CLI to the api image), a
-docker-socket-proxy (least-privilege), or a sandbox-runner sidecar. The image +
-launcher + contract above are identical regardless of which is chosen. See the
-devops handoff message for the recommendation.
+The api **never holds the raw `/var/run/docker.sock`**. It talks to a scoped
+`docker-socket-proxy` sidecar (`docker-compose.yml` service `docker-proxy`) via
+`DOCKER_HOST=tcp://docker-proxy:2375`. The api image carries only the Docker
+**client** binary (copied from `docker:27-cli` in the `Dockerfile`) — no daemon,
+no socket mount.
+
+The proxy allowlist is the minimum `run-sandbox.sh` needs and nothing else:
+
+| Allowed | Why |
+|---------|-----|
+| `CONTAINERS=1` + `POST=1` | create / start / wait / logs / rm |
+| `IMAGES=1` | image inspect (presence check; never pulls) |
+| `PING=1`, `VERSION=1` | CLI connect + API-version negotiation |
+
+Everything else is **denied**: `EXEC`, `VOLUMES`, `NETWORKS`, `BUILD`, `COMMIT`,
+`INFO`, `SYSTEM`, `SWARM`, `SECRETS`, `CONFIGS`, `DISTRIBUTION`, `SESSION`, `AUTH`,
+… (all `0`). The launcher runs the container **detached** and feeds the snippet
+via `SANDBOX_CODE_B64`, so it never needs the attach/exec endpoints. Verified:
+through the proxy, `docker exec`/`info`/`volume ls`/`network ls` all 403 while the
+sandbox flow + all hardening (`--network none`, memory OOM, non-root) hold.
+
+### Residual risk + upgrade path (for the 6b.13 review)
+
+Even scoped, `/containers/create` lets a **compromised api** craft a
+privileged/host-mounted container → host escape. This is **accepted** for a
+single-user LAN research box with the proxy in place (it removes the much larger
+"raw socket = full daemon control" surface). The hardening that contains *hostile
+sandboxed code* is unaffected — that code has no socket and no network.
+
+**Upgrade path if Johnny ever goes internet-facing:** replace the proxy with a
+**sandbox-runner sidecar** that exposes only `run(snippet) -> verdict` and bakes
+the hardening flags in itself, so the api can no longer issue arbitrary
+`/containers/create` at all. The image + `runner.py` + the stdin→JSON contract
+above stay identical; only the launcher's transport changes.

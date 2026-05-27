@@ -19,12 +19,18 @@ services:
       target: runtime
     image: johnny5-api:latest
     env_file: .env
+    # The code_exec launcher (ops/sandbox/) reaches Docker ONLY through the
+    # scoped socket-proxy — the api never mounts the raw /var/run/docker.sock.
+    environment:
+      DOCKER_HOST: "tcp://docker-proxy:2375"
     command: ["uvicorn", "johnny.main:app", "--host", "0.0.0.0", "--port", "8000"]
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      docker-proxy:
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status == 200 else 1)"]
       interval: 15s
@@ -115,6 +121,48 @@ services:
       timeout: 3s
       retries: 12
       start_period: 5s
+    restart: unless-stopped
+    networks:
+      - internal
+
+  # Scoped Docker API proxy for the code_exec sandbox (Phase 6b). The api talks
+  # to this (DOCKER_HOST=tcp://docker-proxy:2375) instead of holding the raw
+  # socket — so an api compromise (it now also runs web_fetch/SSRF + autonomous
+  # tools) can't drive the host daemon at large. The allowlist is the MINIMUM the
+  # launcher needs: containers (create/start/wait/logs/rm) + image inspect; every
+  # other section (exec, volumes, networks, build, info, swarm, …) is denied.
+  # Residual risk (noted for the 6b.13 review): even scoped, /containers/create
+  # lets a compromised api craft a privileged/host-mounted container — acceptable
+  # for a single-user LAN research box; the upgrade path is a sandbox-runner
+  # sidecar that only accepts "run snippet" with fixed flags (see ops/sandbox/README.md).
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    environment:
+      CONTAINERS: "1"        # create / start / wait / logs / rm
+      IMAGES: "1"            # image inspect (presence check before run)
+      POST: "1"              # allow the write verbs above (create/start/wait)
+      PING: "1"
+      VERSION: "1"           # docker CLI negotiates the API version on connect
+      # --- everything else explicitly DENIED ---
+      EXEC: "0"
+      VOLUMES: "0"
+      NETWORKS: "0"
+      BUILD: "0"
+      COMMIT: "0"
+      CONFIGS: "0"
+      SECRETS: "0"
+      SERVICES: "0"
+      SWARM: "0"
+      NODES: "0"
+      TASKS: "0"
+      PLUGINS: "0"
+      SYSTEM: "0"
+      INFO: "0"
+      DISTRIBUTION: "0"
+      SESSION: "0"
+      AUTH: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
     networks:
       - internal

@@ -37,14 +37,14 @@ vision = ["fast"]
 # values-judgement, no heavy reasoning — gemma4 handles it.
 conscience = ["fast"]
 
-# Deliberation fires UNPROMPTED on the heartbeat in Phase 3 (the autonomy loop), so
-# it is LOCAL-FIRST: its 1–2 sentence internal reflections don't need a cloud 70b,
-# and local-first keeps the autonomous loop $0-marginal by default. The
-# BudgetGovernor exists but isn't yet a hard pre-call gate (Phase 6 wires it into
-# the router), so until then we must not let an idle Johnny rack up Groq spend on
-# his own. Cloud stays as a fallback for when local is down. (Revisit once the
-# governor gates cloud calls — then deliberation can safely return to cloud-first.)
-deliberation = ["reasoning", "cloud"]
+# Deliberation fires UNPROMPTED on the heartbeat (the autonomy loop). It is now
+# CLOUD-FIRST again: the BudgetGovernor is a hard pre-call gate in the router
+# (Phase 6a), so an idle Johnny can't rack up unbounded Groq spend — once the daily
+# ceiling is hit, the router skips the cloud step and degrades to local qwen
+# ("tired"). Cloud-first gives his reflections the stronger model while there's
+# budget; local is the safe fallback. (Phase 3 pinned this local-first ONLY because
+# the gate didn't exist yet — that mitigation is now resolved.)
+deliberation = ["cloud", "reasoning"]
 
 # Heavy reasoning, NOT yet autonomous — these are invoked deliberately (Phase 6+),
 # not on the idle heartbeat, so they can stay cloud-first (Groq preferred, local

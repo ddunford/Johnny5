@@ -12,6 +12,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Sequence
 from time import perf_counter
+from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, ValidationError
 
@@ -30,12 +31,41 @@ from brain.llm.pricing import estimate_cost
 from brain.llm.providers.groq import GroqProvider
 from brain.llm.providers.ollama import OllamaProvider
 from brain.llm.routing import ModelStep, RoutingConfig, load_routing_config
+from core.governors import BudgetGovernor
 from foundation.config import Settings
 from foundation.observability import get_logger
 
 _log = get_logger("brain.llm.router")
 
 _JSON_RESPONSE_FORMAT = {"type": "json_object"}
+
+# The call-log status recorded when a paid step is skipped because the daily
+# budget is exhausted (cost 0 — a skip, not a spend; observable in llm_call_log).
+_BUDGET_SKIP_STATUS = "budget_skip"
+
+
+class _BudgetExhausted(Exception):
+    """Internal marker: a cloud step was skipped because the budget was spent.
+
+    Carried as the ``cause`` of ``LLMUnavailableError`` when budget skips are the
+    reason a role had no usable step — so the "tired" terminal state is legible.
+    """
+
+    def __init__(self, provider: str) -> None:
+        super().__init__(f"daily budget exhausted; skipped paid provider {provider!r}")
+        self.provider = provider
+
+
+@runtime_checkable
+class BudgetGate(Protocol):
+    """The budget signal the router gates cloud calls on (Core's ``BudgetGovernor``).
+
+    Kept a Protocol so the router stays decoupled + testable (a fake gate with a
+    deterministic answer in unit tests); the production gate is the Core governor,
+    which reads ``llm_call_log`` against the daily ceiling with an injectable clock.
+    """
+
+    async def is_exhausted(self) -> bool: ...
 
 
 class LLMRouter:
@@ -45,6 +75,7 @@ class LLMRouter:
         providers: dict[str, LLMProvider],
         routing: RoutingConfig,
         call_logger: CallLogger,
+        budget_gate: BudgetGate | None = None,
         failure_threshold: int = 4,
         reset_timeout: float = 60.0,
         schema_retries: int = 1,
@@ -53,6 +84,7 @@ class LLMRouter:
         self._providers = providers
         self._routing = routing
         self._call_logger = call_logger
+        self._budget_gate = budget_gate
         self._schema_retries = schema_retries
         self._breakers = {
             name: CircuitBreaker(
@@ -87,6 +119,18 @@ class LLMRouter:
             breaker = self._breakers[step.provider]
             if not breaker.allow():
                 _log.debug("router.skip_open_circuit", role=role, provider=step.provider)
+                continue
+            # Hard budget gate (FC-4): before a *paid* (cloud) step, refuse if the
+            # daily ceiling is already spent — degrade down the chain to the free
+            # local step ("tired"), never crash. Free steps are never gated.
+            if await self._budget_blocks(step):
+                await self._log(
+                    role, step.provider, step.model, None, _BUDGET_SKIP_STATUS, start=None
+                )
+                _log.warning(
+                    "router.budget_skip", role=role, provider=step.provider, model=step.model
+                )
+                last_error = LLMUnavailableError(role, _BudgetExhausted(step.provider))
                 continue
             try:
                 completion = await self._invoke_with_feedback(
@@ -200,6 +244,20 @@ class LLMRouter:
         await self._log(role, provider.name, model, completion, "ok", start)
         return completion
 
+    async def _budget_blocks(self, step: ModelStep) -> bool:
+        """True when ``step`` is a paid step and the daily budget is exhausted.
+
+        Only *paid* steps are gated — a step is paid iff its (provider, model) is
+        priced (local Ollama is free → never gated, so degradation always has a
+        path). The exhaustion check (a hard ceiling already hit) is the only thing
+        knowable before a call, since the call's token cost isn't known in advance.
+        """
+        if self._budget_gate is None:
+            return False
+        if estimate_cost(step.provider, step.model, 1, 1) <= 0:
+            return False
+        return await self._budget_gate.is_exhausted()
+
     async def _log(
         self,
         role: str,
@@ -207,9 +265,9 @@ class LLMRouter:
         model: str,
         completion: Completion | None,
         status: str,
-        start: float,
+        start: float | None,
     ) -> None:
-        latency_ms = int((perf_counter() - start) * 1000)
+        latency_ms = int((perf_counter() - start) * 1000) if start is not None else 0
         prompt_tokens = completion.prompt_tokens if completion else 0
         completion_tokens = completion.completion_tokens if completion else 0
         await self._call_logger.record(
@@ -245,6 +303,10 @@ def build_router(settings: Settings) -> LLMRouter:
         providers=providers,
         routing=routing,
         call_logger=DatabaseCallLogger(),
+        # The hard budget gate (FC-4): the Core governor reads daily spend from
+        # llm_call_log against groq_daily_budget_usd and the router skips paid steps
+        # once it's exhausted (→ local "tired" degradation). Default UTC-day clock.
+        budget_gate=BudgetGovernor(settings),
         failure_threshold=settings.circuit_failure_threshold,
         reset_timeout=settings.circuit_reset_seconds,
         schema_retries=settings.llm_schema_retries,

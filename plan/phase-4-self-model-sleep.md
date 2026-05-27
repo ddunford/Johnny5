@@ -61,8 +61,8 @@ The Energy drive's `is_sleep_signal` (already emitted by Phase 3, consumed by no
 ## Tasks
 
 - [x] `TASK-4.1` Migrations + seed: `identity` (v1 from Core anchor), `self_improvement_note`, `sleep_log` → `/fastapi-engineer` [TC-4.4, TC-4.6]
-- [ ] `TASK-4.2` Real consolidation summariser: embedding-cluster recent episodes, summarise via the `consolidation` role with provenance, pure projection; replace the P1 stub `_summarise` → `/fastapi-engineer` [TC-4.1, TC-4.9]
-- [ ] `TASK-4.3` ⫘ Memory decay + merge: episodic salience decay (no hard-delete) + salient-strengthen + semantic dedupe/merge → `/fastapi-engineer` [TC-4.2]
+- [x] `TASK-4.2` Real consolidation summariser: embedding-cluster recent episodes, summarise via the `consolidation` role with provenance, pure projection; replace the P1 stub `_summarise` → `/fastapi-engineer` [TC-4.1, TC-4.9]
+- [x] `TASK-4.3` ⫘ Memory decay + merge: episodic salience decay (no hard-delete) + salient-strengthen + semantic dedupe/merge → `/fastapi-engineer` [TC-4.2]
 - [ ] `TASK-4.4` ⫘ Self-Model agent: anchor-grounded reflection → versioned `identity` doc (values/concerns/relationships) + current accessor; pure projection → `/fastapi-engineer` [TC-4.4, TC-4.9]
 - [ ] `TASK-4.5` ⫘ Metacognition agent: outcome/behaviour review → first-person reflection + self-improvement proposals to `self_improvement_note` (proposals only, no apply) + pure projection → `/fastapi-engineer` [TC-4.5, TC-4.9]
 - [ ] `TASK-4.6a` Sleep trigger + state machine: Energy `is_sleep_signal` (or every-N-ticks) trigger; awake↔asleep state with normal ticking paused/resumed in the `run()` loop (FC-7 — a run-loop phase, not a tick stage); `sleep_log` row lifecycle (open on enter, close on wake) → `/fastapi-engineer` [TC-4.3]

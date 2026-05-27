@@ -88,6 +88,44 @@ class Settings(BaseSettings):
     # ── Memory: snapshots (continuity / backups, gitignored) ──
     memory_snapshot_dir: str = Field(default="snapshots/memory")
 
+    # ── Sleep: consolidation (episodic → semantic, the growth engine, SPEC §8) ──
+    # How many recent episodes a single sleep's consolidation pass considers.
+    consolidation_recent_limit: int = Field(default=80)
+    # Cosine-similarity threshold for two episodes to join the same cluster — the
+    # gate between "same theme" and "separate experience". Higher = tighter clusters.
+    consolidation_cluster_threshold: float = Field(default=0.6)
+    # HARD CAP on clusters summarised per sleep = the per-sleep cap on consolidation
+    # LLM calls. The cost guard while the cloud-first `consolidation` role is live and
+    # the BudgetGovernor isn't yet a hard pre-call gate (Phase 6). Episodes past the
+    # cap fold into their nearest existing cluster rather than spawning a new call.
+    consolidation_max_clusters: int = Field(default=8)
+    # Token ceiling for one cluster summary. consolidation is cloud-first (Groq, no
+    # reasoning preamble), but its local fallback is qwen (which DOES emit one) — so
+    # this clears the preamble + the JSON triple (the lessons.md trap), matching the
+    # narrator/affect proven headroom. Tunable (FC-3).
+    consolidation_max_tokens: int = Field(default=1024)
+    # Default confidence for a consolidated fact when the model doesn't supply one.
+    consolidation_default_confidence: float = Field(default=0.6)
+
+    # ── Sleep: memory decay + merge (SPEC §8 — decay ≠ deletion) ──
+    # Episodic memory is append-only in v1: decay only LOWERS salience so recall
+    # favours what matters; an episode is NEVER hard-deleted. Only semantic facts
+    # merge/dedupe (the autobiography must survive).
+    # Max episodes a single decay pass re-scores (bounds the sweep).
+    decay_episode_limit: int = Field(default=2000)
+    # Salience half-life: an (uncharged) episode this many seconds old retains half
+    # its above-floor salience. 7 days — recent memories stay vivid, old ones fade.
+    decay_salience_halflife_seconds: float = Field(default=604800.0)
+    # Salience never decays below this floor (decay ≠ deletion — the row survives).
+    decay_salience_floor: float = Field(default=0.05)
+    # Emotionally-charged / goal-relevant (consolidated-source) episodes are
+    # STRENGTHENED: after decay their salience is pulled this fraction toward 1.0,
+    # so the memories that matter resist fading (SPEC §8 "strengthen ... relevant").
+    decay_charged_boost: float = Field(default=0.25)
+    # Cosine ≥ this ⇒ two semantic facts are near-duplicates and merge into one
+    # (provenance unioned, confidence maxed). High, so only true restatements merge.
+    semantic_merge_threshold: float = Field(default=0.95)
+
     # ── LLM router tuning ──
     llm_routes_path: str = Field(default="config/llm_routes.toml")
     circuit_failure_threshold: int = Field(default=4)

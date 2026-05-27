@@ -76,6 +76,24 @@ def similarity_from_distance(distance: float) -> float:
     return clamp01(1.0 - distance)
 
 
+def cosine_similarity(a: Sequence[float], b: Sequence[float]) -> float:
+    """Cosine similarity of two equal-length vectors, in ``[-1, 1]``.
+
+    The in-memory counterpart to pgvector's ``cosine_distance`` — used where the
+    embeddings are already loaded and a round-trip to the ANN index would be
+    wasteful (consolidation clustering, semantic dedupe). A zero-norm vector has
+    no direction, so similarity is defined as ``0.0`` rather than raising.
+    """
+    if len(a) != len(b):
+        raise ValueError("vectors must have the same length")
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(y * y for y in b))
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
 def recency_score(ts: datetime, now: datetime, halflife_seconds: float) -> float:
     """Exponential time-decay in ``[0, 1]``: 1.0 at ``now``, 0.5 at one half-life old."""
     if halflife_seconds <= 0:

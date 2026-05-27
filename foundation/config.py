@@ -201,6 +201,12 @@ class Settings(BaseSettings):
     drives_config_path: str = Field(default="config/drives.toml")
 
     # ── Cognitive cycle (the heartbeat) ──
+    # Whether the heartbeat auto-starts on boot. Default true (he's alive the
+    # moment the process is up). When false, the bus + control + API + WS all run
+    # but the loop never ticks — a frozen "maintenance"/observation mode that
+    # holds a deterministic empty state (no thoughts/mood/sleep), used by the
+    # fresh-load smoke + demos. He can still be stepped via the control channel.
+    cycle_autostart: bool = Field(default=True)
     # Base seconds between ticks. Phase 3 Affect modulates the rate around this
     # (excited → faster, tired → slower), which is why it's config not code.
     cycle_base_interval_seconds: float = Field(default=4.0)

@@ -41,7 +41,7 @@ from brain.self_model.agent import SelfModel
 from brain.self_model.store import IdentityStore
 from brain.sleep import SleepCycle, WakeSelfCheck
 from brain.workspace import Workspace
-from foundation.config import Settings
+from foundation.config import Settings, get_settings
 from foundation.observability import get_logger
 
 _log = get_logger("brain.runtime")
@@ -111,9 +111,20 @@ class CognitiveRuntime:
         # a failed post-sleep check — so a bad row can't be acted on until the next sleep.
         await self.cycle.apply_wake_check(await self.wake_check.verify())
         self._bus_task = asyncio.create_task(self.workspace.run(), name="workspace-bus")
-        self._cycle_task = asyncio.create_task(self.cycle.run(), name="cognitive-cycle")
+        # The heartbeat auto-starts unless cycle_autostart is off (a frozen
+        # maintenance/observation mode — bus + control + API + WS still run, but the
+        # loop never ticks, holding a deterministic empty state for the fresh-load
+        # smoke + demos). Even when frozen the control channel can step him.
+        if get_settings().cycle_autostart:
+            self._cycle_task = asyncio.create_task(self.cycle.run(), name="cognitive-cycle")
+        else:
+            _log.warning("runtime.cycle_autostart_disabled")
         self._control_task = asyncio.create_task(self._control.run(), name="cycle-control")
-        _log.info("runtime.started", agents=self.registry.names())
+        _log.info(
+            "runtime.started",
+            agents=self.registry.names(),
+            heartbeat=get_settings().cycle_autostart,
+        )
 
     async def stop(self) -> None:
         """Stop the heartbeat, bus, and control listeners, then release the router."""

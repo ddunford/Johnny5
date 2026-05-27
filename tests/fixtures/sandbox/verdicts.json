@@ -1,0 +1,8 @@
+{
+  "_comment": "Verdict envelopes emitted by ops/sandbox/run-sandbox.sh — the launcher's documented 'Observed examples' (ops/sandbox/README.md), recorded by devops from real sandbox runs. Pins the code_exec SandboxVerdict adapter (TASK-6b.6b) per the contract-test house rule. qa's @live leg (TASK-6b.12) recaptures fresh envelopes against the real container once the docker transport is wired.",
+  "success": {"ok": true, "timed_out": false, "exit_code": 0, "stdout": "hello\n", "stderr": "warn\n", "truncated": false, "error": null, "duration_ms": 0},
+  "user_exception": {"ok": false, "timed_out": false, "exit_code": 1, "stdout": "", "stderr": "Traceback ...\nValueError: boom\n", "truncated": false, "error": {"type": "ValueError", "message": "boom"}, "duration_ms": 51},
+  "timeout": {"ok": false, "timed_out": true, "exit_code": 124, "stdout": "", "stderr": "", "truncated": false, "error": {"type": "Timeout", "message": "exceeded 3s of CPU/wall time"}, "duration_ms": 2580},
+  "oom_resource_kill": {"ok": false, "timed_out": false, "exit_code": 137, "stdout": "", "stderr": "killed by SIGKILL — memory (OOM) or resource cap", "error": {"type": "Killed", "message": "sandbox terminated by the kernel resource guard (memory/pids/cpu cap)"}, "duration_ms": 1015},
+  "sandbox_unavailable": {"ok": false, "timed_out": false, "exit_code": 127, "stdout": "", "stderr": "", "error": {"type": "SandboxUnavailable", "message": "docker CLI not available to the launcher"}, "duration_ms": 0}
+}

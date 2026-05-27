@@ -332,6 +332,33 @@ class Settings(BaseSettings):
     # (SPEC §5): a fetched page is distilled, never dumped whole into Johnny's context.
     web_fetch_max_text_chars: int = Field(default=20_000)
 
+    # ── code_exec tool (the sandboxed Python executor, Phase 6b — SPEC §9.1/§9.3) ──
+    # The tool dispatches a snippet INTO the hardened johnny5-sandbox container via
+    # ops/sandbox/run-sandbox.sh — the security boundary (never exec on the host). All
+    # the container isolation flags live in that launcher; these are the tool-side knobs.
+    sandbox_launcher_path: str = Field(default="ops/sandbox/run-sandbox.sh")
+    # In-container graceful timeout (s), passed to the launcher ($1 / SANDBOX_RUN_TIMEOUT).
+    code_exec_timeout_seconds: int = Field(default=10)
+    # The tool waits ``timeout + this`` for the launcher subprocess before killing it.
+    # Must exceed the launcher's own hard backstop margin (SANDBOX_GRACE, default 5s) so
+    # the launcher always wins and returns a structured verdict rather than the tool
+    # killing it mid-run (README guidance: a few seconds over the backstop).
+    code_exec_outer_buffer_seconds: float = Field(default=8.0)
+    # Arg-level cap on snippet size — a huge blob is rejected before it reaches the sandbox.
+    code_exec_max_code_chars: int = Field(default=50_000)
+
+    # ── web_search / news (SearXNG on inference.lan, Phase 6b — his discovery surface) ──
+    searxng_url: str = Field(default="http://inference.lan:8889")
+    # The engine set passed on every query. VERIFIED on the box: google/bing/brave work;
+    # duckduckgo returns 0 results and an empty engine set times out — so this is NOT
+    # optional tuning, it's the working contract. Comma-separated (SearXNG's `engines=`).
+    searxng_engines: str = Field(default="google,bing,brave")
+    # SearXNG fans out to upstream engines, so allow a generous per-query budget.
+    searxng_timeout_seconds: float = Field(default=15.0)
+    # Cap how many results a search/news tool surfaces (Attention bottleneck, SPEC §5).
+    web_search_max_results: int = Field(default=10)
+    news_max_results: int = Field(default=10)
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def sqlalchemy_url(self) -> str:

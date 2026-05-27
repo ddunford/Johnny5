@@ -60,7 +60,7 @@ The first time Johnny becomes *visible*. Phase 5b builds the React + Vite SPA th
 ## Tasks
 
 - [x] `TASK-5b.1` Scaffold `frontend/` (React 19 + Vite + TS), app shell + routing + React Query/Zustand providers + per-panel error boundary + global fallback → `/frontend-react-architect` [TC-5b.9, TC-5b.10]
-- [ ] `TASK-5b.2` Token gate: entry form (RHF+Zod), sessionStorage, header injection on the API client, `?token=` on WS; 1008/401 → re-prompt → `/frontend-react-architect` [TC-5b.7]
+- [x] `TASK-5b.2` Token gate: entry form (RHF+Zod), sessionStorage, header injection on the API client, `?token=` on WS; 1008/401 → re-prompt → `/frontend-react-architect` [TC-5b.7]
 - [ ] `TASK-5b.3a` API client core — fetch wrapper + token-header injection + 401→re-gate handling + the React Query provider/setup + the shared `ServerEnvelope` typing convention (each adapter cites its 5a endpoint) → `/frontend-react-architect` [TC-5b.7, TC-5b.8]
 - [ ] `TASK-5b.3b` ⫘ Typed read adapters + React Query hooks over 5b.3a — state, thoughts, memory (episodes+facts), goals, audit, sleeps, self + the conversation `send` (POST /input); each adapter a typed projection of 5a's envelope → `/frontend-react-architect` [TC-5b.8]
 - [ ] `TASK-5b.4` ⫘ WS service clients (`consciousnessSocket`, `stateSocket`) → Zustand stores; backfill-on-connect + auto-reconnect → `/frontend-react-architect` [TC-5b.2, TC-5b.3]

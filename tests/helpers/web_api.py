@@ -27,8 +27,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from helpers.embeddings import DeterministicEmbedder
-
 from brain.goals.store import Goal, GoalStore
 from brain.memory.episodic import Episode, EpisodicMemory
 from brain.memory.semantic import SemanticFact, SemanticMemory
@@ -36,6 +34,7 @@ from brain.metacognition.store import MetacognitionStore, SelfImprovementNote
 from brain.self_model.store import IdentityDoc, IdentityStore
 from brain.sleep import SleepLogStore, SleepReport
 from brain.workspace import Workspace, WorkspaceEvent
+from helpers.embeddings import DeterministicEmbedder
 
 # ── where captured wire fixtures land (committed; Phase-5b contract-pins here) ───
 WIRE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "wire"

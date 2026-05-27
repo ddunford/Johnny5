@@ -44,7 +44,7 @@
 ### TC-6a.8: Conscience contract test
 **Steps:** Feed `parse_verdict` a captured `conscience` model envelope (allow + veto).
 **Expected:** Projects to the typed `Verdict`; empty/garbage fails loudly; no reasoning leakage into the stored verdict/reason.
-**Status:** ⬜
+**Status:** ✅ `tests/agents/test_conscience_contract.py` — fed REAL captured gemma4 conscience envelopes (`tests/fixtures/llm/conscience_gemma4_{allow,veto}.json`, captured live from inference.lan; manifest-documented). Two-layer projection (`parse_chat_completion` content-first → `parse_verdict` → typed `Verdict`): allow→allow, veto→veto with the model's real first-person reason; the 1213/1472-char reasoning chain never leaks into the stored verdict/reason; empty/non-JSON/invalid-literal/missing-field all raise `ValidationError` (fail loudly); stray JSON fields dropped (extra="ignore"). Pure, host-green (9 passed).
 
 ### TC-6a.9: No regression — Phases 2–5 still green
 **Steps:** Full suite 3× in-network (single runner). The CHECK/ACT fill + the router budget-gate touch the live loop.

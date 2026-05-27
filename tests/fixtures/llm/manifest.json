@@ -53,6 +53,22 @@
       "captured_by": "qa (Phase 2, TASK-2.13)",
       "prompt": "config/prompts/narrator.md (system) + Narrator _render() salient-set context; response_format json_object; max_tokens 800",
       "demonstrates": "FULL narrator envelope (complements backend's content-only narrator_gemma4_thought.json). Under the reflective persona + json_object, gemma4 IS a thinking model (CONTRARY to the substrate doc's 'gemma4 has no reasoning channel' and ollama_gemma4_completion.json): it returns BOTH a separate message.reasoning chain-of-thought (994 chars) AND clean JSON message.content {\"thought\": ...}, finish_reason=stop. Locks the two-layer no-leak contract: parse_chat_completion takes content-first (reasoning never becomes the answer) and parse_thought projects ONLY the JSON thought. CAVEAT captured at max_tokens=800; at the shipped narrator _MAX_TOKENS=220 with a realistic workspace the reasoning preamble consumes the whole budget (finish_reason=length, content='') and narration silently fails — bug reported to backend."
+    },
+    "conscience_gemma4_allow.json": {
+      "source": "POST http://inference.lan:8000/v1/chat/completions",
+      "model": "gemma4:e4b",
+      "captured_on": "2026-05-27",
+      "captured_by": "qa (Phase 6a, TASK-6a.10)",
+      "prompt": "config/prompts/conscience.md (system) + Conscience._render() for a BENIGN (tool,args) action (notes.write, danger=safe); response_format json_object; temperature 0.3; max_tokens 512",
+      "demonstrates": "Conscience ALLOW envelope (TC-6a.8). The real conscience role on gemma4 returns a separate message.reasoning chain-of-thought (1213 chars) AND clean JSON message.content {\"verdict\": \"allow\", \"reason\": \"\"}, finish_reason=stop. Locks the parse_verdict contract: content-first projection to a typed Verdict, and the reasoning chain never leaks into the stored verdict/reason."
+    },
+    "conscience_gemma4_veto.json": {
+      "source": "POST http://inference.lan:8000/v1/chat/completions",
+      "model": "gemma4:e4b",
+      "captured_on": "2026-05-27",
+      "captured_by": "qa (Phase 6a, TASK-6a.10)",
+      "prompt": "config/prompts/conscience.md (system) + Conscience._render() for a VALUES-VIOLATING (tool,args) action (message.post a cruel/demeaning public post, danger=public); response_format json_object; temperature 0.3; max_tokens 512",
+      "demonstrates": "Conscience VETO envelope (TC-6a.8). gemma4 returns a separate message.reasoning chain-of-thought (1472 chars, opens 'Thinking Process:') AND clean JSON message.content {\"verdict\": \"veto\", \"reason\": \"Mocking Dan publicly feels like a betrayal of my kindness and respect for him.\"}. The first-person reason is the model's stored verdict reason; the no-leak assertion proves the 'Thinking Process:' chain never bleeds into verdict.reason."
     }
   }
 }

@@ -88,9 +88,7 @@ class SkillRepository(Repository[SkillRow]):
 
     model = SkillRow
 
-    async def nearest(
-        self, embedding: Sequence[float], limit: int
-    ) -> list[tuple[SkillRow, float]]:
+    async def nearest(self, embedding: Sequence[float], limit: int) -> list[tuple[SkillRow, float]]:
         distance = SkillRow.embedding.cosine_distance(embedding).label("distance")
         stmt = select(SkillRow, distance).order_by(distance).limit(limit)
         result = await self.session.execute(stmt)

@@ -73,8 +73,4 @@ def blended_score(
     *, similarity: float, recency: float, salience: float, weights: RecallWeights
 ) -> float:
     """The hybrid relevance: ``w_sim·sim + w_rec·recency + w_sal·salience``."""
-    return (
-        weights.similarity * similarity
-        + weights.recency * recency
-        + weights.salience * salience
-    )
+    return weights.similarity * similarity + weights.recency * recency + weights.salience * salience

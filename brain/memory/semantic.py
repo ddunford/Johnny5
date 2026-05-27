@@ -210,9 +210,7 @@ class SemanticMemory:
         insert = pg_insert(SemanticEdgeRow).values(
             from_fact=from_fact, to_fact=to_fact, relation=relation
         )
-        stmt = insert.on_conflict_do_nothing(
-            index_elements=["from_fact", "to_fact", "relation"]
-        )
+        stmt = insert.on_conflict_do_nothing(index_elements=["from_fact", "to_fact", "relation"])
         async with session_scope() as session:
             await session.execute(stmt)
             existing = await session.execute(
@@ -224,9 +222,7 @@ class SemanticMemory:
             )
             return _row_to_edge(existing.scalar_one())
 
-    async def neighbours(
-        self, fact_id: int, *, relation: str | None = None
-    ) -> list[SemanticFact]:
+    async def neighbours(self, fact_id: int, *, relation: str | None = None) -> list[SemanticFact]:
         """Facts linked from ``fact_id`` (optionally filtered by relation)."""
         async with session_scope() as session:
             rows = await SemanticEdgeRepository(session).neighbours(fact_id, relation=relation)

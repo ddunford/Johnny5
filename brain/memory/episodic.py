@@ -149,9 +149,7 @@ class EpisodicMemory:
             )
             return _row_to_episode(row)
 
-    async def recall(
-        self, query: str, k: int = 5, *, now: datetime | None = None
-    ) -> list[Episode]:
+    async def recall(self, query: str, k: int = 5, *, now: datetime | None = None) -> list[Episode]:
         """Recall the ``k`` most relevant episodes for ``query`` by the hybrid blend.
 
         Pulls a similarity-ordered candidate pool from the ANN index, then

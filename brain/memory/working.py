@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from typing import cast
 
 from pydantic import BaseModel, Field
@@ -68,9 +68,7 @@ class WorkingMemory:
             decay_factor if decay_factor is not None else settings.working_memory_decay_factor
         )
         self._floor = (
-            salience_floor
-            if salience_floor is not None
-            else settings.working_memory_salience_floor
+            salience_floor if salience_floor is not None else settings.working_memory_salience_floor
         )
         self._default_ttl = (
             default_ttl_seconds
@@ -83,9 +81,7 @@ class WorkingMemory:
 
     # ── public API ──────────────────────────────────────────────────────────
 
-    async def put(
-        self, item: WorkingMemoryItem, ttl: float | None = None
-    ) -> WorkingMemoryItem:
+    async def put(self, item: WorkingMemoryItem, ttl: float | None = None) -> WorkingMemoryItem:
         """Add an item, evicting the least-salient one if at capacity.
 
         ``ttl`` overrides the default; ``ttl <= 0`` means no expiry. Salience is
@@ -139,6 +135,16 @@ class WorkingMemory:
         """Drop the entire working set."""
         await cast("Awaitable[int]", self._redis.delete(self._items_key, self._salience_key))
 
+    async def export_items(self) -> list[WorkingMemoryItem]:
+        """Live items with original timestamps/salience preserved (for snapshots)."""
+        await self._prune_expired(self._clock())
+        return await self._read_all()
+
+    async def import_items(self, items: Iterable[WorkingMemoryItem]) -> None:
+        """Restore items verbatim — timestamps and salience are written as-is."""
+        for item in items:
+            await self._persist(item)
+
     # ── internals (reused by snapshot/restore) ───────────────────────────────
 
     async def _persist(self, item: WorkingMemoryItem) -> None:
@@ -147,9 +153,7 @@ class WorkingMemory:
             "Awaitable[int]",
             self._redis.hset(self._items_key, item.id, item.model_dump_json()),
         )
-        await cast(
-            "Awaitable[int]", self._redis.zadd(self._salience_key, {item.id: item.salience})
-        )
+        await cast("Awaitable[int]", self._redis.zadd(self._salience_key, {item.id: item.salience}))
 
     async def _evict(self, item_id: str) -> None:
         await cast("Awaitable[int]", self._redis.hdel(self._items_key, item_id))

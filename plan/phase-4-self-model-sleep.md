@@ -60,7 +60,7 @@ The Energy drive's `is_sleep_signal` (already emitted by Phase 3, consumed by no
 
 ## Tasks
 
-- [ ] `TASK-4.1` Migrations + seed: `identity` (v1 from Core anchor), `self_improvement_note`, `sleep_log` → `/fastapi-engineer` [TC-4.4, TC-4.6]
+- [x] `TASK-4.1` Migrations + seed: `identity` (v1 from Core anchor), `self_improvement_note`, `sleep_log` → `/fastapi-engineer` [TC-4.4, TC-4.6]
 - [ ] `TASK-4.2` Real consolidation summariser: embedding-cluster recent episodes, summarise via the `consolidation` role with provenance, pure projection; replace the P1 stub `_summarise` → `/fastapi-engineer` [TC-4.1, TC-4.9]
 - [ ] `TASK-4.3` ⫘ Memory decay + merge: episodic salience decay (no hard-delete) + salient-strengthen + semantic dedupe/merge → `/fastapi-engineer` [TC-4.2]
 - [ ] `TASK-4.4` ⫘ Self-Model agent: anchor-grounded reflection → versioned `identity` doc (values/concerns/relationships) + current accessor; pure projection → `/fastapi-engineer` [TC-4.4, TC-4.9]

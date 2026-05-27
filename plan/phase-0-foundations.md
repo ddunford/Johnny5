@@ -55,7 +55,7 @@ The substrate Johnny runs on. No cognition yet — this phase makes "the lights 
 - [x] `TASK-0.5` Redis connection helper + ping; Postgres async session/repository base → `/fastapi-engineer`
 - [x] `TASK-0.6` Implement LLM router: per-role provider chain, circuit breaker, retry-with-feedback, call logging → `/fastapi-engineer` [TC-0.3, TC-0.4]
 - [x] `TASK-0.7` ⫘ Groq + Ollama provider adapters (OpenAI-compatible; gemma4 clean `content`; qwen3.5-9b reasoning-channel handling) → `/fastapi-engineer` [TC-0.3]
-- [ ] `TASK-0.8` ⫘ Embeddings client (`:8002 /embed` custom contract) + vision (gemma4:e4b) + YOLO clients → `/fastapi-engineer` [TC-0.5]
+- [x] `TASK-0.8` ⫘ Embeddings client (`:8002 /embed` custom contract) + vision (gemma4:e4b) + YOLO clients → `/fastapi-engineer` [TC-0.5]
 - [ ] `TASK-0.9` Stub `core/governors.py` reading `llm_call_log` for daily budget (enforcement deferred to Phase 6) → `/fastapi-engineer`
 - [ ] `TASK-0.10` ⫘ Structured JSON logging + correlation IDs + Sentry on the exception handler → `/observability-engineer`
 - [ ] `TASK-0.11` `GET /api/health` reporting all six dependencies → `/fastapi-engineer` [TC-0.1, TC-0.2]

@@ -14,7 +14,13 @@ therefore covered by **deterministic** graceful-degradation tests, not here:
 `test_consolidator.py::test_run_without_a_router_writes_a_deterministic_fallback_fact`
 and `::test_tired_router_attempts_the_llm_then_degrades_to_fallback`, plus the
 sleep-level `test_sleep_cycle.py::test_sleep_completes_and_wakes_when_every_llm_is_unavailable`.
-(Making qwen reliable for structured LOCAL output via `/no_think` is the Phase-6 item.)
+
+Phase 6a made the local path reliable too: the reasoning model now emits clean JSON
+on schema roles via `/no_think` (Ollama native `think:false` + `format:json`), proven
+by `tests/llm/test_no_think_live.py`. This Groq leg still guards the *primary*
+production path; the deterministic fallback tests above still hold (they cover the
+all-providers-down case); and the local qwen path is now genuinely reliable rather
+than only-gracefully-degrading.
 
 Marked ``live`` (deselected unless ``--run-live``); real Groq call (small spend):
 

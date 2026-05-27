@@ -90,18 +90,97 @@ wait_for_healthy() {
     return 1
 }
 
-# Create the dedicated test database on the running postgres if it is missing.
-# Uses the dev superuser over the local socket (trust) — the test DB lives on
-# the same server but is a separate database, so dev data is never touched.
-TEST_DB="johnny5_test"
-ensure_test_db() {
-    local user="${POSTGRES_USER:-johnny5}"
-    if dc exec -T postgres psql -U "$user" -tAc \
-        "SELECT 1 FROM pg_database WHERE datname='${TEST_DB}'" 2>/dev/null | grep -q 1; then
+# ---------------------------------------------------------------------------
+# Test isolation — per-run datastore slots (the 6b concurrency guard).
+#
+# Two `./ctl.sh test` runs that share the single `johnny5_test` DB interleave
+# their per-function TRUNCATEs and corrupt each other (Phase-6a incident: 17
+# phantom failures from a collision). Fix: each run claims an exclusive *slot*
+# (1..N) via `flock`, and the slot maps 1:1 to an isolated Postgres DB
+# (`johnny5_test_be_<slot>`) + a distinct Redis logical db (index = slot) + a
+# deterministically-named run container (`johnny5-test-run-<slot>`). Different
+# slots can never touch the same DB/Redis db, so parallel runs are safe; the
+# flock auto-releases when the launching shell dies, so a crashed run frees its
+# slot. A leaked/SIGKILLed run's orphan container is reaped before slot reuse.
+# ---------------------------------------------------------------------------
+TEST_SLOT_COUNT=15                                      # Redis ships 16 dbs (0..15); 0 is dev, so 1..15.
+TEST_SLOT_WAIT="${TEST_SLOT_WAIT:-1800}"                # seconds to queue if all slots are busy
+TEST_DB_PREFIX="johnny5_test_be"                        # per-slot DB name prefix (contains "test" → passes the migrate guard)
+TEST_LOCK_DIR="${TMPDIR:-/tmp}/johnny5-test-slots"
+TEST_LOCK_FD=200                                        # fixed fd held for the run; closes (releases lock) on shell exit
+TEST_SLOT=""                                            # set by acquire_test_slot
+TEST_RUN_CONTAINER=""                                   # set by cmd_test once the slot is known
+TEST_RUN_PID=""                                         # PID of the backgrounded `docker compose run`
+
+# Claim an exclusive test slot. Scans 1..N non-blocking and takes the first
+# free one; if every slot is busy it queues (blocking) on slot 1 up to
+# TEST_SLOT_WAIT. Holds the lock on fd $TEST_LOCK_FD for the run's lifetime —
+# when this shell exits (normally, on a trapped signal, or via OS cleanup after
+# SIGKILL) the fd closes and the lock releases, so a dead run never wedges a slot.
+acquire_test_slot() {
+    mkdir -p "$TEST_LOCK_DIR"
+    local n
+    for n in $(seq 1 "$TEST_SLOT_COUNT"); do
+        eval "exec ${TEST_LOCK_FD}>\"${TEST_LOCK_DIR}/slot-${n}.lock\""
+        if flock -n "$TEST_LOCK_FD"; then
+            TEST_SLOT="$n"
+            return 0
+        fi
+    done
+    log_warn "All ${TEST_SLOT_COUNT} test slots are busy — queuing for one (up to ${TEST_SLOT_WAIT}s)..."
+    eval "exec ${TEST_LOCK_FD}>\"${TEST_LOCK_DIR}/slot-1.lock\""
+    if flock -w "$TEST_SLOT_WAIT" "$TEST_LOCK_FD"; then
+        TEST_SLOT="1"
         return 0
     fi
-    log_info "Creating test database '${TEST_DB}'..."
-    dc exec -T postgres createdb -U "$user" -O "$user" "${TEST_DB}"
+    return 1
+}
+
+# Create the per-slot test database on the running postgres if it is missing.
+# Uses the dev superuser; the test DB lives on the same server but is a separate
+# database, so dev data is never touched. Reused across sequential runs in the
+# same slot (the per-test TRUNCATE + the session-scoped `alembic upgrade head`
+# keep it clean and current).
+ensure_test_db() {
+    local dbname="$1" user="${POSTGRES_USER:-johnny5}"
+    if dc exec -T postgres psql -U "$user" -tAc \
+        "SELECT 1 FROM pg_database WHERE datname='${dbname}'" 2>/dev/null | grep -q 1; then
+        return 0
+    fi
+    log_info "Creating test database '${dbname}'..."
+    dc exec -T postgres createdb -U "$user" -O "$user" "${dbname}"
+}
+
+# Cleanup for a test run: force-remove the run container (so a trapped
+# SIGTERM/SIGINT — e.g. TaskStop/Ctrl-C — can't leave a detached pytest hammering
+# the DB) and flush this slot's Redis db. `--rm` already removes the container on
+# a clean exit; this makes the interrupted path deterministic too. The slot lock
+# releases when the shell exits and fd $TEST_LOCK_FD closes.
+cleanup_test_run() {
+    # Stop the compose CLI first so it can't (re)create the container in the
+    # narrow window between launch and container creation, then force-remove the
+    # container (kills pytest inside), then flush the slot's Redis db.
+    [ -n "$TEST_RUN_PID" ] && kill "$TEST_RUN_PID" 2>/dev/null || true
+    [ -n "$TEST_RUN_CONTAINER" ] && docker rm -f "$TEST_RUN_CONTAINER" >/dev/null 2>&1 || true
+    [ -n "$TEST_SLOT" ] && dc exec -T redis redis-cli -n "$TEST_SLOT" flushdb >/dev/null 2>&1 || true
+}
+
+# Reap run containers left behind by a SIGKILLed launcher (no trap could fire).
+# A container is an orphan only if its slot lock is FREE — a live run holds its
+# lock, so `flock -n` fails and we leave it strictly alone. Safe to call before
+# claiming our own slot. Requires $TEST_LOCK_DIR to exist.
+reap_orphan_test_containers() {
+    local n cname probe_fd=201
+    for n in $(seq 1 "$TEST_SLOT_COUNT"); do
+        cname="johnny5-test-run-${n}"
+        docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$cname" || continue
+        eval "exec ${probe_fd}>\"${TEST_LOCK_DIR}/slot-${n}.lock\""
+        if flock -n "$probe_fd"; then
+            log_warn "Reaping orphan test container '${cname}' (slot ${n} is free → its run is dead)."
+            docker rm -f "$cname" >/dev/null 2>&1 || true
+        fi
+        eval "exec ${probe_fd}>&-"
+    done
 }
 
 # ---------------------------------------------------------------------------
@@ -175,22 +254,58 @@ cmd_migrate() {       # Apply database migrations (alembic upgrade head)
     log_success "Migrations applied."
 }
 
-cmd_test() {          # Run the test suite against johnny5_test (NEVER the dev DB)
+cmd_test() {          # Run the test suite against an isolated per-run slot (NEVER the dev DB)
     ensure_prod_off test
     log_info "Starting datastores for tests..."
     dc up -d postgres redis
     wait_for_healthy postgres
-    ensure_test_db
+    wait_for_healthy redis
+
+    # Sweep up any run container orphaned by a SIGKILLed launcher before we pick
+    # a slot (only touches containers whose slot lock is free — never a live run).
+    mkdir -p "$TEST_LOCK_DIR"
+    reap_orphan_test_containers
+
+    # Claim an exclusive slot so concurrent runs can't collide on the test DB.
+    if ! acquire_test_slot; then
+        log_error "Could not claim a free test slot within ${TEST_SLOT_WAIT}s — too many concurrent runs."
+        log_error "Check for stray runners: docker ps | grep johnny5-test-run"
+        exit 1
+    fi
+
+    local slot_db="${TEST_DB_PREFIX}_${TEST_SLOT}"
+    TEST_RUN_CONTAINER="johnny5-test-run-${TEST_SLOT}"
+    # Reap any orphan container left in this slot by a previously SIGKILLed run
+    # (its launcher died, releasing the lock, but `--rm` couldn't fire) before we
+    # reuse the slot's DB — closes the only remaining same-slot collision window.
+    docker rm -f "$TEST_RUN_CONTAINER" >/dev/null 2>&1 || true
+    # Tear down the container + flush the slot's Redis db on any exit (incl.
+    # trapped SIGTERM/SIGINT). The slot lock frees when this shell exits.
+    trap cleanup_test_run EXIT INT TERM
+
+    ensure_test_db "$slot_db"
     local user="${POSTGRES_USER:-johnny5}" pass="${POSTGRES_PASSWORD:-}"
     local host="${POSTGRES_HOST:-postgres}" port="${POSTGRES_PORT:-5432}"
-    local test_url="postgresql+asyncpg://${user}:${pass}@${host}:${port}/${TEST_DB}"
-    log_info "pytest -> database '${TEST_DB}' (isolated from dev)"
-    dc run --rm --no-deps \
+    local test_url="postgresql+asyncpg://${user}:${pass}@${host}:${port}/${slot_db}"
+    local redis_url="redis://redis:6379/${TEST_SLOT}"
+
+    log_info "Test slot ${TEST_SLOT}/${TEST_SLOT_COUNT}: db '${slot_db}', redis db ${TEST_SLOT}, container '${TEST_RUN_CONTAINER}' (isolated from dev + other runs)"
+    # Background the run + `wait` on it so the cleanup trap fires *immediately* on
+    # SIGTERM/SIGINT (TaskStop/Ctrl-C). `wait` is an interruptible builtin; a
+    # foreground external command would instead defer the trap until pytest
+    # finished if the signal hit only ctl.sh's PID (not the process group) —
+    # exactly the 6a "killing bash leaves the container running" failure. `wait`
+    # returns pytest's real exit code on a clean finish, which we propagate.
+    local rc=0
+    dc run --rm --name "$TEST_RUN_CONTAINER" --no-deps \
         -e APP_ENV=testing \
-        -e POSTGRES_DB="${TEST_DB}" \
+        -e POSTGRES_DB="${slot_db}" \
         -e DATABASE_URL="${test_url}" \
-        -e REDIS_URL="${TEST_REDIS_URL:-redis://redis:6379/1}" \
-        api uv run --frozen pytest "$@"
+        -e REDIS_URL="${redis_url}" \
+        api uv run --frozen pytest "$@" &
+    TEST_RUN_PID=$!
+    wait "$TEST_RUN_PID" || rc=$?
+    return "$rc"
 }
 
 cmd_health() {        # Report stack + dependency health
@@ -230,7 +345,8 @@ $(printf '%bLifecycle%b' "$GREEN" "$NC")
 
 $(printf '%bApp / data%b' "$GREEN" "$NC")
   migrate            Apply migrations (alembic upgrade head)
-  test [pytest args] Run the suite against johnny5_test         ${DIM}(dev only)${NC}
+  test [pytest args] Run the suite in an isolated per-run slot   ${DIM}(dev only)${NC}
+                     ${DIM}concurrent runs claim distinct DB+Redis slots (1..${TEST_SLOT_COUNT}); safe in parallel${NC}
   shell [svc]        Shell into a container (default: api)
   db                 Interactive psql into the dev database
   repl               Open the cockpit: watch him think, speak, pause/step

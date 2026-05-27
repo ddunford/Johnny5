@@ -104,9 +104,9 @@ def _state_message(event: WorkspaceEvent) -> dict[str, Any]:
         "mood": payload.get("mood"),
         "goals": payload.get("goals", []),
         "interval": payload.get("interval"),
-        # Sleep status (awake/asleep + last-sleep summary). Absent on pre-Phase-4
-        # snapshots, so default to "awake, never slept" for a stable schema.
-        "sleep": payload.get("sleep", {"asleep": False, "last": None}),
+        # Sleep status (awake/asleep + full-agency gate + last-sleep summary). Absent
+        # on pre-Phase-4 snapshots, so default to "awake, full agency, never slept".
+        "sleep": payload.get("sleep", {"asleep": False, "full_agency": True, "last": None}),
     }
 
 

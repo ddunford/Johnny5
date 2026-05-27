@@ -35,7 +35,7 @@ from brain.memory.snapshot import MemorySnapshot
 from brain.memory.working import WorkingMemory
 from brain.metacognition.agent import Metacognition
 from brain.self_model.agent import SelfModel
-from brain.sleep import SleepCycle
+from brain.sleep import SleepCycle, WakeSelfCheck
 from brain.workspace import Workspace
 from foundation.config import Settings
 from foundation.observability import get_logger
@@ -55,6 +55,7 @@ class CognitiveRuntime:
         cycle: CognitiveCycle,
         drives: DriveEngine,
         self_model: SelfModel,
+        wake_check: WakeSelfCheck,
     ) -> None:
         self.workspace = workspace
         self.registry = registry
@@ -62,6 +63,7 @@ class CognitiveRuntime:
         self.cycle = cycle
         self.drives = drives
         self.self_model = self_model
+        self.wake_check = wake_check
         self._control = CycleControlListener(cycle)
         self._bus_task: asyncio.Task[None] | None = None
         self._cycle_task: asyncio.Task[None] | None = None
@@ -80,6 +82,11 @@ class CognitiveRuntime:
         self.registry.attach(self.workspace)
         await self.drives.bootstrap()
         await self.self_model.bootstrap()
+        # Boot is a wake (SPEC §9.3): verify the persisted self-model + Core invariants
+        # are intact BEFORE the heartbeat starts. A boot into a corrupted/tampered
+        # self-model comes up degraded (no autonomous action) + alerting, identical to
+        # a failed post-sleep check — so a bad row can't be acted on until the next sleep.
+        await self.cycle.apply_wake_check(await self.wake_check.verify())
         self._bus_task = asyncio.create_task(self.workspace.run(), name="workspace-bus")
         self._cycle_task = asyncio.create_task(self.cycle.run(), name="cognitive-cycle")
         self._control_task = asyncio.create_task(self._control.run(), name="cycle-control")
@@ -153,6 +160,9 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
     # SelfModel instance is shared with the runtime so startup bootstraps the same
     # one sleep refreshes (prod + test seed identically via SelfModel.bootstrap()).
     self_model = SelfModel(router)
+    # One WakeSelfCheck shared by the sleep pipeline (post-sleep gate) and the runtime
+    # (startup gate), over the same self_model + drives, so both reference one truth.
+    wake_check = WakeSelfCheck(self_model=self_model, drives=drives)
     sleep_cycle = SleepCycle(
         consolidator=Consolidator(SemanticMemory(), router=router),
         decay=MemoryDecay(),
@@ -160,6 +170,7 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
         metacognition=Metacognition(router),
         snapshot=MemorySnapshot(working=working_memory),
         drives=drives,
+        wake_check=wake_check,
     )
 
     cycle = CognitiveCycle(
@@ -190,4 +201,5 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
         cycle=cycle,
         drives=drives,
         self_model=self_model,
+        wake_check=wake_check,
     )

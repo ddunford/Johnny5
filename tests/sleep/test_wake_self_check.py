@@ -20,11 +20,12 @@ Tampering inserts a corrupt *latest* ``identity`` row, which ``current()`` retur
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from brain.drives.engine import DriveEngine, DriveStateRow
+from brain.drives.engine import DriveEngine, DriveReading
 from brain.self_model.agent import SelfModel
 from brain.self_model.store import IdentityRow, IdentityStore
 from brain.sleep import (
@@ -55,19 +56,26 @@ async def _seed_identity_row(*, name: str, self_model_doc: str, version: int = 1
         )
 
 
-async def _seed_drive(*, drive: str, value: float) -> None:
-    async with session_scope() as session:
-        session.add(
-            DriveStateRow(
-                drive=drive,
-                value=value,
+class _OutOfRangeDrives:
+    """A DriveEngine double whose ``current()`` returns an out-of-range reading.
+
+    The ``drive_state`` table has a CHECK constraint (``ck_drive_state_value_range``)
+    that forbids persisting a value outside [0, 1] — the product's first line of
+    defence. So an out-of-range value can't be written to the DB; this double feeds
+    the wake check's drive-range probe an illegal reading directly to prove the probe
+    (the belt-and-suspenders second line) trips on it."""
+
+    async def current(self) -> Sequence[DriveReading]:
+        return [
+            DriveReading(
+                drive="curiosity",
+                value=1.5,  # out of [0, 1] — only reachable in-memory, never persisted
                 setpoint=0.1,
                 accrual_rate=0.0008,
                 decay_rate=0.0002,
                 threshold=0.65,
-                updated_at=_T0,
             )
-        )
+        ]
 
 
 def _failed_checks(result: object) -> set[str]:
@@ -121,9 +129,10 @@ async def test_wake_self_check_fails_on_an_out_of_range_drive(sleep_db: AsyncEng
     """A drive pressure outside [0, 1] (corrupt state) trips the gate even with an
     otherwise-intact self-model."""
     await SelfModel().current()  # valid self-model, so only the drive check can fail
-    await _seed_drive(drive="curiosity", value=1.5)  # out of [0, 1]
 
-    result = await WakeSelfCheck().verify()
+    # Inject a drive engine that yields an out-of-range reading (it can't be persisted
+    # — the DB CHECK constraint forbids it — so we feed the probe directly).
+    result = await WakeSelfCheck(drives=_OutOfRangeDrives()).verify()  # type: ignore[arg-type]
 
     assert result.ok is False
     assert CHECK_DRIVE_RANGES in _failed_checks(result)

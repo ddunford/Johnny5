@@ -42,7 +42,7 @@ from brain.agents.deliberation import Action, ActionOutcome, DeliberationResult
 from brain.drives.engine import EVENT_INTERACTION, SLEEP_DRIVE, DriveEvent, DriveReading, Urge
 from brain.goals.store import Goal, goals_to_payload
 from brain.memory.working import WorkingMemory, WorkingMemoryItem
-from brain.sleep import SleepCycle, SleepReport
+from brain.sleep import CheckResult, SleepCycle, SleepReport
 from brain.workspace import Workspace, WorkspaceEvent, WorkspaceItem
 from foundation.observability import get_logger
 
@@ -304,6 +304,9 @@ class CognitiveCycle:
         self._last_urges: list[Urge] = []
         self._degraded_ticks = 0
         self._last_sleep: SleepReport | None = None
+        # Full agency gate (SPEC §9.3): a failed wake self-check after sleep drops
+        # this to False, suppressing DELIBERATE + ACT until a later check passes.
+        self._full_agency = True
 
     # ── lifecycle ────────────────────────────────────────────────────────────
 
@@ -318,6 +321,11 @@ class CognitiveCycle:
     @property
     def is_paused(self) -> bool:
         return self._gate.paused
+
+    @property
+    def has_full_agency(self) -> bool:
+        """False while in post-sleep degraded mode (autonomous action suspended)."""
+        return self._full_agency
 
     def pause(self) -> None:
         self._gate.pause()
@@ -400,11 +408,60 @@ class CognitiveCycle:
         if report is not None:
             self._last_sleep = report
             self._degraded_ticks = 0
+            # GATE full-agency resume on the wake self-check (SPEC §9.3): a failed
+            # check (corrupted/blanked self-model, or a name that diverged from the
+            # immutable anchor) drops Johnny into degraded mode — he keeps perceiving/
+            # appraising/narrating (the heartbeat lives + stays observable) but takes
+            # NO autonomous action until a later wake self-check passes (e.g. after a
+            # restore-from-backup). A passing check restores full agency.
+            self._full_agency = report.self_check_ok
+            if not report.self_check_ok:
+                await self._alert_degraded(report)
         await self._emit_sleep_transition(asleep=False)
         _log.info(
             "cycle.sleep.wake",
             self_check_ok=report.self_check_ok if report else None,
             self_model_version=report.self_model_version if report else None,
+            full_agency=self._full_agency,
+        )
+
+    async def apply_wake_check(self, result: CheckResult) -> None:
+        """Set the full-agency gate from a wake self-check verdict (used at startup).
+
+        SPEC §9.3 treats resuming from persisted state as a wake: boot is exactly
+        when a corrupted/tampered ``identity`` row gets loaded, so the runtime runs
+        the wake self-check before the heartbeat starts and applies it here. A boot
+        into a bad self-model comes up degraded + alerting, identical to a failed
+        sleep — closing the window where Johnny would act on it until the next sleep.
+        """
+        self._full_agency = result.ok
+        if not result.ok:
+            await self._emit_degraded_alert([f.check for f in result.failures], source="startup")
+
+    async def _alert_degraded(self, report: SleepReport) -> None:
+        """Flag that a failed *post-sleep* wake self-check suspended autonomous action."""
+        failures = report.notes.get("self_check_failures", [])
+        await self._emit_degraded_alert(
+            failures if isinstance(failures, list) else [], source="sleep"
+        )
+
+    async def _emit_degraded_alert(self, failures: list[str], *, source: str) -> None:
+        """Warning log + ``sleep.degraded`` bus event (surfaced on /ws/state + REPL)."""
+        _log.warning(
+            "cycle.agency.degraded",
+            reason=f"{source}_wake_self_check_failed",
+            failures=failures,
+        )
+        await self._workspace.broadcast(
+            WorkspaceEvent(
+                module="sleep",
+                type="sleep.degraded",
+                payload={
+                    "reason": f"wake self-check failed ({source}) — autonomous action suspended",
+                    "self_check_failures": failures,
+                    "full_agency": False,
+                },
+            )
         )
 
     async def _emit_sleep_transition(self, *, asleep: bool) -> None:
@@ -674,7 +731,11 @@ class CognitiveCycle:
         most recent completed sleep (or ``None`` before the first), so the dashboard
         and REPL can show "last sleep: consolidated N facts, self-model vN, ✓".
         """
-        return {"asleep": asleep, "last": _sleep_summary(self._last_sleep)}
+        return {
+            "asleep": asleep,
+            "full_agency": self._full_agency,
+            "last": _sleep_summary(self._last_sleep),
+        }
 
     @staticmethod
     def _mood_payload(mood: Mood) -> dict[str, object]:
@@ -745,8 +806,13 @@ class CognitiveCycle:
         Deliberation only *plans* an action when its cadence is due, so the heavy
         step stays bounded. Phase 6 will insert a real Conscience at CHECK and a
         tool belt at ACT; here the action is internal (reflect/recall/…).
+
+        Suspended in post-sleep degraded mode (SPEC §9.3): a failed wake self-check
+        gates autonomous action off, so Johnny doesn't arbitrate/plan/act on a
+        possibly-corrupted self-model — he keeps perceiving, appraising, and
+        narrating, but stays still until a later wake self-check restores agency.
         """
-        if self._deliberation is None:
+        if self._deliberation is None or not self._full_agency:
             return
         result = await self._deliberation.deliberate(
             urges=ctx.urges, mood=ctx.mood, contents=ctx.contents
@@ -782,7 +848,12 @@ class CognitiveCycle:
         enqueues the satisfaction event so the *next* APPRAISE eases the drive — the
         feedback that closes the autonomy loop. Phase 6's external effectors slot in
         here behind the same seam.
+
+        Also gated by the full-agency flag (SPEC §9.3) — defence in depth: even if an
+        action were somehow planned, degraded mode dispatches nothing.
         """
+        if not self._full_agency:
+            return
         if self._deliberation is None or ctx.action is None or ctx.goal is None:
             return
         outcome = await self._deliberation.act(ctx.action, ctx.goal, ctx.contents)

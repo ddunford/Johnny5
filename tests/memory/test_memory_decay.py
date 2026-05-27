@@ -222,10 +222,16 @@ async def test_decay_lowers_salience_but_never_deletes_a_row(memory_db: AsyncEng
 
 async def test_charged_episodes_are_strengthened_not_faded(memory_db: AsyncEngine) -> None:
     """Emotion-tagged and consolidated-source (goal-relevant) episodes strengthen;
-    a plain aged episode in the same pass decays — and nothing is deleted."""
-    emotional_id = await _insert_episode(salience=0.4, ts=_T0, emotion_tags=["frustration"])
-    consolidated_id = await _insert_episode(salience=0.4, ts=_T0)  # referenced by a fact below
-    plain_old_id = await _insert_episode(salience=0.8, ts=_T0)
+    a plain aged episode in the same pass decays — and nothing is deleted.
+
+    The charged episodes are *recent* (age 0 at the decay reference): the boost pulls
+    them above their current salience. (A very old charged episode still net-decays —
+    the boost only resists the fade — so it is the recency here that yields a strict
+    strengthen; the plain episode is aged so it falls.)"""
+    now = _T0 + timedelta(seconds=_HALFLIFE * 2)
+    emotional_id = await _insert_episode(salience=0.4, ts=now, emotion_tags=["frustration"])
+    consolidated_id = await _insert_episode(salience=0.4, ts=now)  # referenced by a fact below
+    plain_old_id = await _insert_episode(salience=0.8, ts=_T0)  # aged → will decay
     # Mark `consolidated_id` as goal-relevant: a semantic fact was distilled from it.
     await _insert_fact(
         subject="a lesson",
@@ -236,7 +242,7 @@ async def test_charged_episodes_are_strengthened_not_faded(memory_db: AsyncEngin
         sources=[consolidated_id],
     )
 
-    report = await _decay().run(now=_T0 + timedelta(seconds=_HALFLIFE * 2))
+    report = await _decay().run(now=now)
 
     assert await _episode_count() == 3  # no episode deleted
     assert await _episode_salience(emotional_id) > 0.4  # charged → strengthened

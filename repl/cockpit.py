@@ -187,6 +187,8 @@ class Cockpit:
         sleep = cast("dict[str, Any] | None", payload.get("sleep"))
         if sleep is not None:
             status = "😴 asleep" if sleep.get("asleep") else "awake"
+            if not sleep.get("full_agency", True):
+                status += " ⚠ DEGRADED (autonomous action suspended — wake self-check failed)"
             last = cast("dict[str, Any] | None", sleep.get("last"))
             if last:
                 check = "✓" if last.get("self_check_ok") else "✗"

@@ -31,7 +31,14 @@ from brain.memory.snapshot import MemorySnapshot
 from brain.memory.working import WorkingMemory, WorkingMemoryItem
 from foundation.db import session_scope
 
-_ALL_TABLES = ("episode", "semantic_fact", "semantic_edge", "skill")
+_MEMORY_TABLES = ("episode", "semantic_fact", "semantic_edge", "skill")
+# Snapshot v2 also carries identity + drive/mood/goal. ``memory_db`` only cleans the
+# memory spine, and migrations *seed* identity/drive_state — so these tests must clear
+# the v2 stores themselves, or a v2 ``snapshot()`` would capture a non-deterministic
+# number of seeded rows (an order-dependent flake). Cleared to empty so the v2 counts
+# are a deterministic 0 here; the memory round-trip is what these tests assert.
+_V2_TABLES = ("identity", "goal", "drive_state", "mood")
+_ALL_TABLES = (*_MEMORY_TABLES, *_V2_TABLES)
 
 
 # ── 1. survives a simulated restart ──────────────────────────────────────────
@@ -110,6 +117,10 @@ async def test_snapshot_restores_into_a_clean_db_identically(
     embedder = DeterministicEmbedder()
     working = WorkingMemory(redis=redis_client, clock=FrozenClock(start=1_000.0))
 
+    # Clear the v2 stores (migration-seeded identity/drives) so the v2 snapshot below
+    # captures a deterministic empty state regardless of test order.
+    await _truncate_all()
+
     # seed all four persistent stores + working memory
     await EpisodicMemory(embedder).write(Episode(kind="observation", content="alpha", salience=0.4))
     semantic = SemanticMemory(embedder)
@@ -138,7 +149,9 @@ async def test_snapshot_restores_into_a_clean_db_identically(
         "working": [],
     }
 
-    # ... then restore and assert the state is reproduced down to the row.
+    # ... then restore and assert the state is reproduced down to the row. A v2
+    # snapshot returns the 9-key counts shape (memory spine + identity/drive/mood/goal,
+    # all 0 here since only the memory stores were seeded).
     counts = await snapshotter.restore(snapshot_path)
     assert counts == {
         "episodes": 1,
@@ -146,6 +159,10 @@ async def test_snapshot_restores_into_a_clean_db_identically(
         "semantic_edges": 1,
         "skills": 1,
         "working_memory": 1,
+        "identity": 0,
+        "drive_state": 0,
+        "mood": 0,
+        "goal": 0,
     }
     assert await _dump_state(working) == before
 

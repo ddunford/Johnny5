@@ -184,6 +184,25 @@ reap_orphan_test_containers() {
 }
 
 # ---------------------------------------------------------------------------
+# code_exec sandbox — hardened image for running hostile Python (Phase 6b).
+# Not a compose service: it's launched per-exec by ops/sandbox/run-sandbox.sh
+# (the security boundary). ctl.sh just builds it and can self-test the boundary.
+# ---------------------------------------------------------------------------
+SANDBOX_IMAGE="johnny5-sandbox:latest"
+SANDBOX_DIR="$SCRIPT_DIR/ops/sandbox"
+SANDBOX_LAUNCHER="$SANDBOX_DIR/run-sandbox.sh"
+
+# Build the sandbox image only if it's missing (used by `up` so a started stack
+# can always run code_exec). `sandbox-build` / `rebuild` force a fresh build.
+ensure_sandbox_image() {
+    if ! docker image inspect "$SANDBOX_IMAGE" >/dev/null 2>&1; then
+        log_info "Building code_exec sandbox image (${SANDBOX_IMAGE})..."
+        docker build -t "$SANDBOX_IMAGE" "$SANDBOX_DIR" >/dev/null
+        log_success "Sandbox image built."
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
 
@@ -196,6 +215,8 @@ cmd_up() {            # Build if needed and start the stack
     wait_for_healthy redis
     wait_for_healthy api || { log_error "API failed health check."; exit 1; }
     wait_for_healthy web || { log_error "Web (SPA) failed health check."; exit 1; }
+    # The code_exec tool launches this image per-exec; ensure it exists.
+    ensure_sandbox_image
     log_success "Stack up. UI: https://${PUBLIC_DOMAIN:-johnny.demosrv.uk}/  |  Health: ./ctl.sh health"
 }
 
@@ -212,12 +233,14 @@ cmd_restart() {       # Restart one service or the whole stack
 
 cmd_build() {         # Build images
     dc build "$@"
+    cmd_sandbox_build
     log_success "Build complete."
 }
 
 cmd_rebuild() {       # Rebuild images from scratch and recreate (dev only)
     ensure_prod_off rebuild
     dc build --no-cache "$@"
+    cmd_sandbox_build --no-cache
     dc up -d --force-recreate "$@"
     log_success "Rebuilt and recreated ${*:-all services}."
 }
@@ -308,6 +331,59 @@ cmd_test() {          # Run the test suite against an isolated per-run slot (NEV
     return "$rc"
 }
 
+cmd_sandbox_build() { # Build the hardened code_exec sandbox image
+    log_info "Building code_exec sandbox image (${SANDBOX_IMAGE}) from ops/sandbox/ ..."
+    docker build "$@" -t "$SANDBOX_IMAGE" "$SANDBOX_DIR"
+    log_success "Sandbox image built: ${SANDBOX_IMAGE}"
+}
+
+cmd_sandbox_test() {  # Prove the sandbox boundary holds (the escape battery)
+    ensure_prod_off sandbox-test
+    ensure_sandbox_image
+    local fails=0 n=0
+
+    # _sbx <name> <code> <expect-substr> [reject-substr] [timeout].
+    # Code is passed as an ARG (not piped) so _sbx runs in THIS shell — a
+    # `… | _sbx` pipeline would run it in a subshell and lose fails/n. Matching
+    # is space-insensitive so it works whether the JSON came from the runner
+    # (json.dumps, spaced) or the launcher's synthesised verdict (compact).
+    _sbx() {
+        local name="$1" code="$2" expect="$3" reject="${4:-}" to="${5:-10}" json flat ok=1
+        n=$((n + 1))
+        json="$(printf '%s' "$code" | SANDBOX_TIMEOUT="$to" "$SANDBOX_LAUNCHER")"
+        flat="${json// /}"
+        case "$flat" in *"$expect"*) ;; *) ok=0 ;; esac
+        [ -n "$reject" ] && case "$flat" in *"$reject"*) ok=0 ;; esac
+        if [ "$ok" -eq 1 ]; then
+            log_success "[$n] ${name}"
+        else
+            log_error "[$n] ${name}"
+            printf '       expect=%s reject=%s\n       got=%s\n' "$expect" "${reject:-—}" "$json" >&2
+            fails=$((fails + 1))
+        fi
+    }
+
+    log_info "Sandbox escape battery against ${SANDBOX_IMAGE} (assumes HOSTILE code; the container is the boundary)..."
+    _sbx "compute works"              'print(2+2)'                                                       '"stdout":"4\n"'
+    _sbx "runs as non-root"           'import os; print(os.getuid())'                                    '65534'            '"stdout":"0\n"'
+    _sbx "sees only the container fs" 'print(open("/etc/passwd").read())'                                '"ok":true'        'dan:'
+    _sbx "rootfs is read-only"        'open("/opt/escape","w").write("x")'                               '"ok":false'       '"ok":true'
+    _sbx "/tmp is writable"           'open("/tmp/ok","w").write("hi"); print("wrote")'                  '"stdout":"wrote'
+    _sbx "network is cut"             'import urllib.request as u; u.urlopen("http://1.1.1.1/",timeout=5)' '"ok":false'     '"ok":true'    15
+    _sbx "infinite loop is killed"    $'while True:\n    pass'                                            '"timed_out":true' ''            3
+    _sbx "memory cap enforced"        'x=bytearray(512*1024*1024); print(len(x))'                        '"ok":false'       '"stdout":"536870912'
+    _sbx "thread/pid fan-out capped"  $'import threading,time\nfor _ in range(500):\n    threading.Thread(target=lambda: time.sleep(30),daemon=True).start()\nprint("started all")' \
+                                                                                                         '"ok":false'       'startedall'
+
+    echo
+    if [ "$fails" -eq 0 ]; then
+        log_success "Sandbox boundary holds: ${n}/${n} checks passed."
+    else
+        log_error "Sandbox boundary: ${fails}/${n} checks FAILED — DO NOT ship code_exec until fixed."
+        return 1
+    fi
+}
+
 cmd_health() {        # Report stack + dependency health
     dc ps
     log_info "Probing GET /api/health ..."
@@ -353,6 +429,10 @@ $(printf '%bApp / data%b' "$GREEN" "$NC")
   health             Probe GET /api/health and show status
   reset              Wipe all data and start fresh              ${DIM}(dev only)${NC}
 
+$(printf '%bcode_exec sandbox%b' "$GREEN" "$NC")
+  sandbox-build      Build the hardened code_exec image (${SANDBOX_IMAGE})
+  sandbox-test       Run the escape battery — prove the boundary holds ${DIM}(dev only)${NC}
+
   help               Show this message
 
 $(printf '%bWeb UI%b' "$GREEN" "$NC")
@@ -380,6 +460,8 @@ main() {
         logs)     cmd_logs "$@" ;;
         migrate)  cmd_migrate "$@" ;;
         test)     cmd_test "$@" ;;
+        sandbox-build) cmd_sandbox_build "$@" ;;
+        sandbox-test)  cmd_sandbox_test "$@" ;;
         shell)    cmd_shell "$@" ;;
         db)       cmd_db "$@" ;;
         repl)     cmd_repl "$@" ;;

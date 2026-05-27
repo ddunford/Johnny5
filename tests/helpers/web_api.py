@@ -57,6 +57,7 @@ from brain.affect.agent import Affect, MoodRepository, MoodRow
 from brain.agents.sensorium import InputQueue
 from brain.cycle import serialize_sleep_block, serialize_state, sleep_summary_from_log
 from brain.drives.engine import DriveEngine
+from brain.effectors.action_log import ActionAuditReader
 from brain.goals.store import Goal, GoalStore
 from brain.memory.episodic import Episode, EpisodicMemory
 from brain.memory.semantic import SemanticFact, SemanticMemory
@@ -88,6 +89,7 @@ API_TABLES = (
     "percept",
     "thought",
     "workspace_event",
+    "action_log",
     "self_improvement_note",
     "identity",
     "sleep_log",
@@ -176,6 +178,7 @@ def build_api_app(
             metacognition=metacognition,
             drives=drives,
             affect=Affect(router=None),
+            action_audit=ActionAuditReader(),
             cycle=cycle,
             embedder=shared_embedder,
         )

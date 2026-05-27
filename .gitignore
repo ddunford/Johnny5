@@ -67,3 +67,6 @@ playwright-report/
 .vscode/
 *.swp
 *.log
+
+# Local Claude Code agent/team scratch (never commit)
+.claude/

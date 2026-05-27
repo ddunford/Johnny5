@@ -16,7 +16,7 @@ import httpx
 import pytest
 
 from brain.llm.base import ProviderError
-from brain.llm.detection import DETECTOR_PROVIDER_NAME, Detection, Detector
+from brain.llm.detection import DETECTOR_PROVIDER_NAME, Detection, Detector, parse_detections
 from foundation.config import Settings
 
 pytestmark = pytest.mark.contract
@@ -34,13 +34,9 @@ def _detector_with(handler: Callable[[httpx.Request], httpx.Response]) -> Detect
     return detector
 
 
-async def test_projects_real_envelope_to_detections(load_fixture: FixtureLoader) -> None:
+def test_projects_real_envelope_to_detections(load_fixture: FixtureLoader) -> None:
     env = load_fixture(YOLO)
-    detector = _detector_with(lambda req: httpx.Response(200, json=env))
-    try:
-        detections = await detector.detect_base64("ignored")
-    finally:
-        await detector.aclose()
+    detections = parse_detections(env)
 
     assert len(detections) == env["count"] == 5
     assert all(isinstance(d, Detection) for d in detections)
@@ -54,14 +50,8 @@ async def test_projects_real_envelope_to_detections(load_fixture: FixtureLoader)
     assert bus.bbox.y2 > bus.bbox.y1
 
 
-async def test_empty_detections_returns_empty_list() -> None:
-    detector = _detector_with(
-        lambda req: httpx.Response(200, json={"detections": [], "count": 0, "image_size": {}})
-    )
-    try:
-        assert await detector.detect_base64("ignored") == []
-    finally:
-        await detector.aclose()
+def test_empty_detections_returns_empty_list() -> None:
+    assert parse_detections({"detections": [], "count": 0, "image_size": {}}) == []
 
 
 async def test_http_error_raises_provider_error() -> None:

@@ -33,7 +33,7 @@ from brain.llm.embeddings import Embedder
 from brain.llm.providers.groq import GROQ_PROVIDER_NAME, GroqProvider
 from brain.llm.providers.ollama import OLLAMA_PROVIDER_NAME, OllamaProvider
 from brain.llm.providers.openai_compatible import OpenAICompatibleProvider
-from brain.llm.router import LLMRouter, build_router
+from brain.llm.router import LLMRouter
 from brain.llm.routing import ModelStep, RoutingConfig
 from brain.llm.vision import Vision
 from foundation.config import Settings
@@ -145,8 +145,23 @@ async def test_live_forced_failover_groq_down_to_local(settings: Settings) -> No
 
 
 async def test_live_vision_describes_image(settings: Settings) -> None:
-    """gemma4:e4b multimodal via the router (vision role) describes a real image."""
-    router = build_router(settings)
+    """gemma4:e4b multimodal via the router (vision role) describes a real image.
+
+    Built with an in-memory call logger (not the DB logger) so this live leg
+    doesn't open the process-global DB engine on its event loop — which would
+    otherwise leave a stale engine for the health leg below.
+    """
+    router = LLMRouter(
+        providers={OLLAMA_PROVIDER_NAME: OllamaProvider(settings)},
+        routing=RoutingConfig(
+            roles={
+                "vision": [
+                    ModelStep(provider=OLLAMA_PROVIDER_NAME, model=settings.local_fast_model)
+                ]
+            }
+        ),
+        call_logger=_MemoryLogger(),
+    )
     vision = Vision(router)
     try:
         description = await vision.describe(
@@ -170,3 +185,36 @@ async def test_live_yolo_detects_objects(settings: Settings) -> None:
         assert all(0.0 < d.confidence <= 1.0 for d in detections)
     finally:
         await detector.aclose()
+
+
+def test_live_health_reports_all_six_dependencies_reachable() -> None:
+    """Full-stack 'lights on': boot the app and assert GET /api/health reports
+    all six dependencies reachable against the real stack.
+
+    Postgres/redis are network-only (compose `internal` network), so this asserts
+    for real when run inside the stack: ``./ctl.sh test -m live --run-live``. From
+    a host ``uv run`` the stores aren't reachable, so the leg skips with guidance
+    rather than reporting a false failure — the off-box inference legs above still
+    run on the host.
+    """
+    from fastapi.testclient import TestClient
+
+    from johnny.main import create_app
+
+    with TestClient(create_app()) as client:
+        resp = client.get("/api/health")
+
+    body = resp.json()
+    deps = body["dependencies"]
+    assert set(deps) == {"postgres", "redis", "groq", "ollama", "embeddings", "yolo"}
+
+    if deps["postgres"]["status"] != "ok" or deps["redis"]["status"] != "ok":
+        pytest.skip(
+            "compose stack (postgres/redis) not reachable from this runner — "
+            "run via `./ctl.sh test -m live --run-live` to verify the full stack"
+        )
+
+    assert resp.status_code == 200
+    assert body["status"] == "ok"
+    for name, comp in deps.items():
+        assert comp["status"] == "ok", f"{name} not reachable: {comp.get('detail')}"

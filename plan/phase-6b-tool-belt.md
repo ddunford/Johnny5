@@ -53,6 +53,7 @@ Every tool here is a `Tool` in 6a's registry, so it's automatically Conscience-v
 8. Tests (per tool + the curiosity-loop E2E) + security review (SSRF, sandbox escape).
 
 ## Tasks
+- [ ] `TASK-6b.0` **(do first)** `ctl.sh test` concurrency guard — make parallel test runs safe under agent teams (the 6a orphan-collision fix): either a `flock` that refuses/queues a second run, OR per-run DB+Redis isolation (override `POSTGRES_DB`/`DATABASE_URL`/`REDIS_URL` to a `_be`-suffixed DB + distinct Redis db per run). Heavy 6b test load (backend pytest + qa Playwright + `@live` + frontend vitest) makes this load-bearing → `/devops-deployment-engineer`
 - [ ] `TASK-6b.1` Migration: `note`, `scheduled_wakeup` → `/fastapi-engineer` [TC-6b.5, TC-6b.6]
 - [ ] `TASK-6b.2` `web_search` tool (SearXNG `inference.lan:8889` → ranked results) — verify the SearXNG contract live before building (lessons.md) → `/fastapi-engineer` [TC-6b.1]
 - [ ] `TASK-6b.3` `web_fetch` tool — **SSRF-hardened**: scheme allowlist, post-DNS IP deny-list (private/loopback/link-local/metadata), redirect-hop re-check + cap, size+time cap, readability text extraction → `/fastapi-engineer` [TC-6b.2, TC-6b.9]

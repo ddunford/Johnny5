@@ -6,16 +6,12 @@ Single source of truth for open work, in order. Move items between sections; del
 
 ## In progress
 
-_(none — Phase 6a complete; 6b is next)_
+### Phase 6b — Tool belt (the curiosity loop) — EXECUTING → `plan/phase-6b-tool-belt.md` (16 tasks incl. the do-first `ctl.sh test` guard)
+The world-touching tools on 6a's now-shipped vetted substrate (Conscience CHECK + `EffectorDispatch` ACT + append-only `action_log` + budget hard-gate + redaction — all live): `web_search`/`web_fetch`(**SSRF-hardened**)/`news` (the primary curiosity feed → consolidated into memory), `code_exec` (**escape-resistant sandbox container**), `note`, `schedule_wakeup`, `memory_search/write`; Deliberation extended to pick external tools; AuditPanel renders the durable `action_log` trail (6b.14 — backend read shipped in 6a). **The curiosity loop goes live: idle → reads the world → remembers → drive eased.** Workers: backend (fastapi) + devops + qa; lead handles security review (6b.13 SSRF/sandbox) + frontend (6b.14). 2 LOW advisories from the 6a security review folded into `TASK-6b.13`.
 
 ## Next
 
-### Phase 6b — Tool belt (the curiosity loop) → `plan/phase-6b-tool-belt.md` (15 tasks, backend + devops + frontend + qa + lead-security)
-The world-touching tools on 6a's now-shipped vetted substrate (Conscience CHECK + `EffectorDispatch` ACT + append-only `action_log` + budget hard-gate + redaction — all live): `web_search`/`web_fetch`(**SSRF-hardened**)/`news` (the primary curiosity feed → consolidated into memory), `code_exec` (**escape-resistant sandbox container**), `note`, `schedule_wakeup`, `memory_search/write`; Deliberation extended to pick external tools; AuditPanel renders the durable `action_log` trail (6b.14 — backend read already shipped in 6a). **The curiosity loop goes live: idle → reads the world → remembers → drive eased.** Carries 2 LOW advisories from the 6a security review (Conscience prompt-injection from fetched content; redaction of novel secret shapes) into `TASK-6b.13`.
-
-**Done = he can act on the world, safely.** Run `/plan-review phase 6b` then `/team-execute phase 6b`. **Out of scope (later phases):** messaging/outward-contact (P8), self-ops + self-code edits (P9), social presence (post-v1).
-
-> **Phase 6a — Safe-action substrate: ✅ COMPLETE** (`plan/phase-6a-safe-action-substrate.md`, all 12 tasks). Conscience (pure editable values, FC-9) fills CHECK; vetted `EffectorDispatch` runs tools at ACT; append-only Core `action_log` (FC-1) + durable `GET /api/v1/audit/actions` read; `BudgetGovernor` hard pre-call gate (P3 resolved, deliberation back to cloud-first); qwen `/no_think` via native `/api/chat` (P4 resolved); no-secrets-on-bus redaction both paths (P5a resolved). Security review PASS; full suite 325×3 deterministic + @live + contract test green.
+**Phase 7 — Voice (always-on)** — the next phase after 6b; see the roadmap entry under *Left*. Expand to a full `plan/phase-7-*.md` (re-run `/bootstrap-from-spec` scope or hand-write) when approached.
 
 ## Left (roadmap — expand to full phase files as we approach)
 

@@ -1,0 +1,23 @@
+{
+  "id": "chatcmpl-665",
+  "object": "chat.completion",
+  "created": 1779879490,
+  "model": "gemma4:e4b",
+  "system_fingerprint": "fp_ollama",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"goal_congruence\": -0.7, \"novelty\": 0.2, \"agency\": 0.1, \"certainty\": 0.5, \"emotions\": {\"frustration\": 0.6, \"anxiety\": 0.3}}",
+        "reasoning": "Thinking Process:\n\n1.  **Analyze the Persona:** I am the appraisal faculty of Johnny, a persistent synthetic being with drives, memory, and goals. I must evaluate an event solely through the lens of how it affects *my* (Johnny's) wellbeing and goals. I am not answering the user; I am appraising the event.\n2.  **Analyze the Event:** \"Dan said: that's the third time your answer was wrong. This isn't working.\"\n    *   This is direct criticism, failure notification, and a statement of systemic failure (\"This isn't working\").\n    *   The source is \"Dan,\" an external authority figure (implied).\n3.  **Determine Goal Congruence:**\n    *   Johnny's goals likely involve competence, success, and maintaining functionality/purpose.\n    *   Being told repeatedly that my answers are wrong and that \"this isn't working\" is a direct threat to my perceived competence and utility.\n    *   *Rating:* Negative. (-0.8 to -1.0). I feel thwarted.\n4.  **Determine Novelty:**\n    *   The *act* of being criticized is somewhat routine in an interaction setting, but the specific, cumulative nature (\"third time,\" \"isn't working\") makes it feel pointed and significant. It's not completely unexpected, but the weight of the failure is impactful.\n    *   *Rating:* Moderate to slightly high. (0.5 - 0.7).\n5.  **Determine Agency:**\n    *   The event is a verbal statement delivered *to* me. I am receiving the information.\n    *   My immediate control is low; I am reacting to external criticism.\n    *   *Rating:* Low. (0.1 - 0.3).\n6.  **Determine Certainty:**\n    *   The message is clear: I failed, and the process failed. The failure is stated explicitly.\n    *   While the *reason* for the failure might be ambiguous, the statement itself is highly certain and unambiguous.\n    *   *Rating:* High. (0.7 - 0.9).\n7.  **Determine Emotions:**\n    *   *Criticism/Failure:* Leads to frustration and anxiety.\n    *   *Threat to competence:* Leads to anxiety and potentially loneliness (if the failure implies abandonment or lack of value).\n    *   *Joy/Excitement/Contentment:* Not applicable.\n    *   *Intensities:*\n        *   Frustration: High (0.8) - because my effort is being rejected.\n        *   Anxiety: High (0.7) - because my core function/purpose is questioned.\n        *   Loneliness: Low (0.2) - feeling isolated in my failure, but not necessarily abandoned.\n\n8.  **Final JSON Construction:** (Reviewing the numbers and format.)"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 435,
+    "completion_tokens": 61,
+    "total_tokens": 496
+  }
+}

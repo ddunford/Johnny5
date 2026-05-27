@@ -27,7 +27,10 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from brain.affect.appraisal import Mood
+from brain.agents.attention import AttentionBias
 from brain.cycle import CognitiveCycle, TickReport
+from brain.drives.engine import DriveEngine, DriveEvent, DriveReading, Urge
 from brain.memory.working import WorkingMemory
 from brain.workspace import Workspace, WorkspaceItem
 from helpers.clock import FrozenClock
@@ -156,6 +159,71 @@ class RecordingLearning:
         self.learned.append((list(contents), thought))
 
 
+class StubDrives:
+    """Drive-stage double: returns a fixed set of readings each tick and records the
+    events the APPRAISE stage fed it. ``urges`` delegates to the real pure
+    projection so over-threshold filtering/ordering match production."""
+
+    def __init__(self, readings: Sequence[DriveReading] = ()) -> None:
+        self._readings = list(readings)
+        self.stepped_events: list[list[DriveEvent]] = []
+
+    async def step(
+        self, events: Sequence[DriveEvent] = (), *, now: datetime | None = None
+    ) -> Sequence[DriveReading]:
+        self.stepped_events.append(list(events))
+        return list(self._readings)
+
+    def urges(self, readings: Sequence[DriveReading]) -> Sequence[Urge]:
+        return DriveEngine.urges(readings)
+
+
+class StubAffect:
+    """Affect-stage double: appraises every tick into a fixed ``Mood`` and records
+    what it was asked to appraise (so a test can drive the cycle's rate/bias from a
+    known mood without the LLM or the DB)."""
+
+    def __init__(self, mood: Mood) -> None:
+        self._mood = mood
+        self.calls = 0
+        self.last_drives: list[DriveReading] = []
+
+    async def appraise_tick(
+        self,
+        *,
+        contents: Sequence[WorkspaceItem],
+        drives: Sequence[DriveReading],
+        events: Sequence[DriveEvent] = (),
+        now: datetime | None = None,
+    ) -> Mood:
+        self.calls += 1
+        self.last_drives = list(drives)
+        return self._mood
+
+
+class RecordingAttention:
+    """Attention double that records the ``AttentionBias`` the cycle set each tick
+    (to assert affect steers attention) and otherwise selects the top-k by salience."""
+
+    def __init__(self, capacity: int = 7) -> None:
+        self.capacity = capacity
+        self.biases: list[AttentionBias] = []
+        self.calls = 0
+
+    def set_bias(self, bias: AttentionBias) -> None:
+        self.biases.append(bias)
+
+    async def select(
+        self,
+        *,
+        working_memory: Sequence[WorkspaceItem],
+        percepts: Sequence[WorkspaceItem],
+    ) -> Sequence[WorkspaceItem]:
+        self.calls += 1
+        pool = sorted([*percepts, *working_memory], key=lambda item: item.salience, reverse=True)
+        return pool[: self.capacity]
+
+
 # ── the assembled harness ───────────────────────────────────────────────────────
 
 
@@ -185,8 +253,14 @@ def build_cycle(
     recall: object | None = None,
     narration: object | None = None,
     learning: object | None = None,
+    drives: object | None = None,
+    affect: object | None = None,
     working_memory: WorkingMemory | None = None,
     interval_seconds: float = 4.0,
+    min_interval_seconds: float = 1.5,
+    max_interval_seconds: float = 12.0,
+    arousal_speedup: float = 1.0,
+    tired_slowdown: float = 1.5,
     workspace_capacity: int = 7,
 ) -> CycleHarness:
     """Assemble a :class:`CycleHarness` with an instant ``sleep_fn``.
@@ -194,8 +268,11 @@ def build_cycle(
     Stages are optional — an absent stage no-ops in the cycle, so a minimal cycle
     still ticks. Pass real agents (Attention, recall, Narrator) to exercise their
     behaviour, or the doubles above for pure-wiring/determinism/resilience tests.
-    The ``workspace`` should already carry a :func:`datetime_from` ``now_fn`` on
-    the same ``clock`` for fully deterministic timestamps.
+    Wire ``drives`` + ``affect`` (the Phase-3 APPRAISE stage) to exercise rate
+    modulation + attention bias; the interval bounds mirror the production defaults
+    so an assertion can check the rate stays within ``[min, max]``. The
+    ``workspace`` should already carry a :func:`datetime_from` ``now_fn`` on the
+    same ``clock`` for fully deterministic timestamps.
     """
     cycle = CognitiveCycle(
         workspace,
@@ -204,8 +281,14 @@ def build_cycle(
         recall=recall,  # type: ignore[arg-type]
         narration=narration,  # type: ignore[arg-type]
         learning=learning,  # type: ignore[arg-type]
+        drives=drives,  # type: ignore[arg-type]
+        affect=affect,  # type: ignore[arg-type]
         working_memory=working_memory,
         interval_seconds=interval_seconds,
+        min_interval_seconds=min_interval_seconds,
+        max_interval_seconds=max_interval_seconds,
+        arousal_speedup=arousal_speedup,
+        tired_slowdown=tired_slowdown,
         workspace_capacity=workspace_capacity,
         sleep_fn=_noop_sleep,
     )
@@ -215,7 +298,10 @@ def build_cycle(
 __all__ = [
     "CycleHarness",
     "PassthroughAttention",
+    "RecordingAttention",
     "RecordingLearning",
+    "StubAffect",
+    "StubDrives",
     "StubNarration",
     "StubPerception",
     "StubRecall",

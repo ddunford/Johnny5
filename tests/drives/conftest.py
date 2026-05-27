@@ -22,11 +22,17 @@ deterministic.
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import AsyncIterator
 
 import pytest_asyncio
+from helpers.clock import FrozenClock
+from helpers.cycle import datetime_from
 from helpers.db import dispose_global_engine, install_fresh_global_engine, truncate_tables
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine
+
+from brain.workspace import Workspace
 
 # Phase-3 motivational tables (children-first) followed by the heartbeat + memory
 # tables a full autonomy-loop test also writes through. CASCADE + RESTART IDENTITY
@@ -63,3 +69,20 @@ async def drives_db(_migrated_test_db: None) -> AsyncIterator[AsyncEngine]:
     finally:
         await truncate_tables(_DRIVE_TABLES)
         await dispose_global_engine()
+
+
+@pytest_asyncio.fixture
+async def workspace(
+    drives_db: AsyncEngine, redis_client: Redis, frozen_clock: FrozenClock
+) -> Workspace:
+    """A :class:`Workspace` on the flushed test Redis + clean Postgres, stamping
+    events from the shared ``frozen_clock`` — for cycle-integration tests (the
+    APPRAISE stage broadcasts drive/mood state, FC-8). Namespaced per test so
+    parallel runs never collide on the bus or the blackboard."""
+    suffix = uuid.uuid4().hex
+    return Workspace(
+        redis=redis_client,
+        channel=f"johnny:test:{suffix}:bus",
+        contents_key=f"johnny:test:{suffix}:contents",
+        now_fn=datetime_from(frozen_clock),
+    )

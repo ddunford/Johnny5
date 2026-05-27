@@ -8,8 +8,13 @@ Single source of truth for open work, in order. Move items between sections; del
 
 ## Next
 
-### Phase 6 — Tool belt + Conscience
-Effectors + tools: web search/fetch, **news browsing** (primary curiosity feed), sandboxed code execution, notes/journal, self-scheduler, memory ops. The Mind's Conscience (values vetting) + the Core's integrity check + audit. **Done = he can act on the world, safely.** **Must also land the carried cross-cutting items** (see below): wire the `BudgetGovernor` into the router as a hard pre-call gate (Phase-3 advisory — then deliberation can go cloud-first again); `/no_think` for the local reasoning model on structured roles (Phase-4 advisory — makes the qwen sleep fallback reliable); and keep secrets out of `workspace_event` payloads (Phase-5a advisory — `/audit` exposes them). Expand to a full `plan/phase-6-*.md` + test plan before executing.
+### Phase 6 — Tool belt + Conscience  →  split into 6a + 6b (tasked, ready)
+He acts on the world, safely. Split into sub-phases because the safe-action substrate (Conscience + vetted dispatch + audit + the carried safety items) MUST land + be reviewable before any world-touching tool.
+
+- **Phase 6a — Safe-action substrate** → `plan/phase-6a-safe-action-substrate.md` (11 tasks, backend + lead-security). Fills the cycle CHECK stub with the **Conscience** (values vetting, in the Mind — FC-9) + makes ACT run an approved tool via a typed `ToolRegistry`, with the single FC-5 dispatch point now writing an append-only `action_log` (Core `audit.py`, FC-1). Lands the **three carried advisories**: wire `BudgetGovernor` into `LLMRouter.complete()` as a **hard pre-call gate** (P3 — then revert `deliberation` to cloud-first); **`/no_think`** for the reasoning model on schema roles (P4 — reliable qwen fallback); **no-secrets-on-the-bus** redaction (P5a). One inert tool only — no world-touching yet.
+- **Phase 6b — Tool belt** → `plan/phase-6b-tool-belt.md` (13 tasks, backend + devops + qa + lead-security). The tools on 6a's vetted substrate: `web_search`/`web_fetch`(**SSRF-hardened**)/`news` (the primary curiosity feed → consolidated into memory), `code_exec` (**escape-resistant sandbox container**), `note`, `schedule_wakeup`, `memory_search/write`; Deliberation extended to pick external tools. **The curiosity loop goes live: idle → reads the world → remembers → drive eased.**
+
+**Done = he can act on the world, safely.** Run `/plan-review phase 6a` then `/team-execute` (6a, then 6b). **Out of scope (later phases):** messaging/outward-contact (P8), self-ops + self-code edits (P9), social presence (post-v1).
 
 ## Left (roadmap — expand to full phase files as we approach)
 

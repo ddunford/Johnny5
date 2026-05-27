@@ -31,6 +31,7 @@ from foundation.observability import (
 from foundation.redis_client import close_redis
 from johnny.api.health import health_router
 from johnny.api.v1.router import v1_router
+from johnny.api.ws import ws_router
 
 
 @asynccontextmanager
@@ -112,6 +113,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(v1_router)
+    app.include_router(ws_router)
 
     return app
 

@@ -6,18 +6,12 @@ Single source of truth for open work, in order. Move items between sections; del
 
 ## In progress
 
-### Phase 5b — Web UI (`johnny.demosrv.uk`)  →  `plan/phase-5b-web-ui.md`  ⟵ team `johnny5-phase-5b`
-React 19 + Vite + TS SPA behind Traefik (new `web` nginx service, path-routed): Conversation, live Consciousness stream, State dashboard (drives/mood/goals/energy + awake-asleep/⚠DEGRADED/self-model-version/last-sleep), Memory browser, Audit, read-only Self panel. Service-layer **contract tests fed 5a's captured wire fixtures** + a mandatory **fresh-load smoke** against a real backend (`/plan-review` 7b/7c). Token gate driven from the UI. (Self-edit *approval* UI is Phase 9 — labelled placeholder only.) 17 tasks (frontend + devops + qa + lead-security). **Done = you can watch and talk to him in a browser.**
-
 ## Next
-- **Phase 5b — Web UI** → `plan/phase-5b-web-ui.md` (frontend + devops + qa, 15 tasks). React 19 + Vite + TS SPA behind Traefik (new `web` nginx service, path-routed): Conversation, live Consciousness stream, State dashboard (drives/mood/goals/energy + awake-asleep/⚠DEGRADED/self-model-version/last-sleep), Memory browser, Audit, read-only Self panel. Service-layer **contract tests fed 5a's captured wire fixtures** + a mandatory **fresh-load smoke** against a real backend (`/plan-review` 7b/7c). Token gate driven from the UI. (Self-edit *approval* UI is Phase 9 — labelled placeholder only.)
-
-**Done = you can watch and talk to him in a browser.** Run `/plan-review` then `/team-execute` (5a, then 5b).
-
-## Left (roadmap — expand to full phase files as we approach)
 
 ### Phase 6 — Tool belt + Conscience
-Effectors + tools: web search/fetch, **news browsing** (primary curiosity feed), sandboxed code execution, notes/journal, self-scheduler, memory ops. The Mind's Conscience (values vetting) + the Core's integrity check + audit. **Done = he can act on the world, safely.**
+Effectors + tools: web search/fetch, **news browsing** (primary curiosity feed), sandboxed code execution, notes/journal, self-scheduler, memory ops. The Mind's Conscience (values vetting) + the Core's integrity check + audit. **Done = he can act on the world, safely.** **Must also land the carried cross-cutting items** (see below): wire the `BudgetGovernor` into the router as a hard pre-call gate (Phase-3 advisory — then deliberation can go cloud-first again); `/no_think` for the local reasoning model on structured roles (Phase-4 advisory — makes the qwen sleep fallback reliable); and keep secrets out of `workspace_event` payloads (Phase-5a advisory — `/audit` exposes them). Expand to a full `plan/phase-6-*.md` + test plan before executing.
+
+## Left (roadmap — expand to full phase files as we approach)
 
 ### Phase 7 — Voice (always-on)
 Wake-word (openWakeWord) → **Speaches STT** (`:8890`, `Systran/faster-whisper-small`) → percept; **Kokoro TTS** (`:8880`) → **Johnny robot-voice DSP** out (see `voice/` — PoC built); unprompted speech driven by affect/drives; barge-in. CPU TTS/STT latency is significant → stream/queue, never block the cycle. **Done = you can talk to him out loud and he talks back, unprompted, in his own voice.**

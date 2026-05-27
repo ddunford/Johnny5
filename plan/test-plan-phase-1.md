@@ -8,22 +8,22 @@
 ### TC-1.1: Episodic write + read-back
 **Steps:** Write an episode; fetch by id.
 **Expected:** Persisted with ts, content, salience, and a 1024-d embedding. Read-back matches.
-**Status:** ⬜
+**Status:** ✅ Pass — `tests/memory/test_episodic_recall.py::test_write_persists_and_reads_back` (+ salience clamp).
 
 ### TC-1.2: Hybrid recall ranking
 **Steps:** Seed episodes: (a) topically similar but old + low salience, (b) topically similar, recent, high salience, (c) unrelated. Recall with a query matching the topic, k=2.
 **Expected:** (b) ranks above (a); (c) excluded. Pure-similarity ordering would tie (a) and (b) — the recency+salience weighting must separate them.
-**Status:** ⬜
+**Status:** ✅ Pass — `tests/memory/test_episodic_recall.py`: ranking test asserts [b, a] order + (c) excluded; a companion test proves similarity-only weighting ties (a)/(b), so the blend is what separates them. Deterministic axis-vector embeddings + injected `now`.
 
 ### TC-1.3: Semantic facts + graph edges
 **Steps:** Upsert two facts; link them with a relation; recall by query; traverse the edge.
 **Expected:** Facts recalled by similarity; edge returns the linked fact. Re-upserting the same subject/predicate updates, not duplicates.
-**Status:** ⬜
+**Status:** ✅ Pass — `tests/memory/test_semantic_memory.py`: similarity recall, edge traversal + relation filter, idempotent link, and re-upsert-updates-in-place (single row).
 
 ### TC-1.4: Procedural skill reinforcement
 **Steps:** Store a skill; `find` it by query; `reinforce` with success then failure.
 **Expected:** Found by similarity; `success_rate` and `uses` update correctly.
-**Status:** ⬜
+**Status:** ✅ Pass — `tests/memory/test_procedural_memory.py`: find-by-intent, reinforce success→failure (uses/successes/rate exact), re-store preserves history, unknown-skill raises.
 
 ### TC-1.5: Working memory bound + decay
 **Steps:** Put items beyond capacity; advance time; call decay.

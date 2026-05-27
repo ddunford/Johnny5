@@ -1,25 +1,21 @@
 """DB fixtures for the memory-spine tests — cross-loop safe by construction.
 
-``foundation.db`` exposes a *process-global* async engine (correct for the one
-uvicorn loop in production). Reusing it across the per-function event loops
-pytest-asyncio creates is the #1 gotcha carried from Phase 0: a connection (or
-engine) bound to test A's loop blows up inside test B's loop. So these fixtures
-deliberately do **not** touch the global engine — each test gets a fresh,
-short-lived engine with ``NullPool`` (no connection is retained past the test),
-disposed in teardown.
+The memory stores persist through ``foundation.db.session_scope()``, which uses
+a **process-global** async engine (correct for production's single uvicorn loop,
+and the same pattern as ``DatabaseCallLogger``). Reusing that global engine
+across the per-function event loops pytest-asyncio creates is the #1 gotcha
+carried from Phase 0: an engine bound to test A's loop blows up inside test B's
+loop ("attached to a different loop").
 
-Schema is applied once per session by running ``alembic upgrade head`` against
-whatever database the settings point at — which ``./ctl.sh test`` sets to
-``johnny5_test``. A guard refuses to migrate anything that isn't a ``*_test``
-database, so this can never run against dev.
+``memory_db`` defuses it by construction: each test gets a **fresh** global
+engine, created with ``NullPool`` (no connection survives the test) and bound to
+that test's own loop, then disposed on the same loop in teardown. Because the
+stores read the global engine via ``session_scope()``, installing it here is
+what lets them run under test at all.
 
-Two session styles:
-  * ``db_session`` — rolled back in teardown. Repo writes ``flush`` rather than
-    ``commit``, and recall queries run in the same transaction, so nothing is
-    persisted between tests: perfect isolation for repository/recall unit tests.
-  * ``clean_db`` — truncates the memory tables before and after the test, for
-    the restart-persistence test (TASK-1.9) which must *commit* and then prove
-    data survives a brand-new engine/connection.
+Schema is applied once per session via ``alembic upgrade head`` against whatever
+database the settings point at — which ``./ctl.sh test`` sets to ``johnny5_test``.
+A guard refuses to migrate anything that isn't a ``*_test`` database.
 """
 
 from __future__ import annotations
@@ -29,31 +25,24 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
+from redis.asyncio import Redis, from_url
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+import foundation.db as db
 from foundation.config import get_settings
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-# The four memory tables (SPEC §12 / phase-1 plan). Truncated in dependency
-# order via CASCADE so the persistence test starts from a known-empty state.
+# Truncated in FK-safe order (edges reference facts); CASCADE + RESTART IDENTITY
+# leaves every memory table empty with ids reset for deterministic assertions.
 _MEMORY_TABLES = ("semantic_edge", "semantic_fact", "skill", "episode")
 
 
 @pytest.fixture(scope="session")
 def _migrated_test_db() -> None:
-    """Bring the test database to ``head`` exactly once per test session.
-
-    Imported lazily so a non-DB test run (e.g. ``tests/helpers``) never pays the
-    alembic import cost, and so the safety guard runs before any migration.
-    """
+    """Bring the test database to ``head`` exactly once per test session."""
     settings = get_settings()
     if "test" not in settings.postgres_db.lower():
         pytest.fail(
@@ -61,58 +50,65 @@ def _migrated_test_db() -> None:
             f"{settings.postgres_db!r} — run via ./ctl.sh test (johnny5_test)"
         )
 
-    from alembic import command
     from alembic.config import Config
+
+    from alembic import command
 
     cfg = Config(str(_PROJECT_ROOT / "alembic.ini"))
     command.upgrade(cfg, "head")
 
 
-@pytest_asyncio.fixture
-async def db_engine(_migrated_test_db: None) -> AsyncIterator[AsyncEngine]:
-    """A fresh per-test async engine bound to the current event loop.
+def _install_fresh_global_engine() -> AsyncEngine:
+    """Point ``foundation.db``'s process-global engine at a new NullPool engine
+    bound to the current event loop (mirrors what ``dispose_engine`` manages)."""
+    engine = create_async_engine(get_settings().sqlalchemy_url, poolclass=NullPool, future=True)
+    db._engine = engine
+    db._sessionmaker = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+    return engine
 
-    ``NullPool`` means no connection outlives the test, which is what keeps this
-    safe across pytest-asyncio's per-function loops.
+
+async def _truncate_memory_tables() -> None:
+    async with db.get_engine().begin() as conn:
+        for table_name in _MEMORY_TABLES:
+            await conn.execute(text(f"TRUNCATE TABLE {table_name} RESTART IDENTITY CASCADE"))
+
+
+@pytest_asyncio.fixture
+async def memory_db(_migrated_test_db: None) -> AsyncIterator[AsyncEngine]:
+    """A clean memory schema on a fresh, loop-local global engine.
+
+    Tests drive the stores (which call ``session_scope()``) and may read back via
+    ``session_scope()`` too — both resolve to the engine installed here. Tables
+    start and end empty, so order/identity assertions are deterministic.
     """
-    engine = create_async_engine(
-        get_settings().sqlalchemy_url, poolclass=NullPool, future=True
-    )
+    engine = _install_fresh_global_engine()
+    await _truncate_memory_tables()
     try:
         yield engine
     finally:
-        await engine.dispose()
+        await _truncate_memory_tables()
+        await db.dispose_engine()
 
 
 @pytest_asyncio.fixture
-async def db_session(db_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
-    """A session whose transaction is rolled back after the test (isolation)."""
-    maker = async_sessionmaker(db_engine, expire_on_commit=False, autoflush=False)
-    async with maker() as session:
-        try:
-            yield session
-        finally:
-            await session.rollback()
+async def redis_client() -> AsyncIterator[Redis]:
+    """A fresh, loop-local Redis client over a flushed test DB (working memory).
 
-
-async def _truncate_memory_tables(engine: AsyncEngine) -> None:
-    async with engine.begin() as conn:
-        for table_name in _MEMORY_TABLES:
-            await conn.execute(
-                text(f"TRUNCATE TABLE {table_name} RESTART IDENTITY CASCADE")
-            )
-
-
-@pytest_asyncio.fixture
-async def clean_db(db_engine: AsyncEngine) -> AsyncIterator[AsyncEngine]:
-    """Yield an engine over freshly-truncated memory tables; clean again after.
-
-    For the restart-persistence test: it commits, disposes the engine, opens a
-    new one, and asserts the data is still there — so the data must really land
-    on disk, and the table must start and end empty.
+    Like the engine fixture, a per-test client avoids reusing a connection bound
+    to another event loop. ``./ctl.sh test`` points ``REDIS_URL`` at db 1; a
+    guard refuses to flush unless running in the testing env, and ``flushdb``
+    only affects the connected (test) database.
     """
-    await _truncate_memory_tables(db_engine)
+    settings = get_settings()
+    if settings.app_env.lower() != "testing":
+        pytest.fail(
+            f"refusing to flush Redis outside the testing env (app_env={settings.app_env!r}) "
+            "— run via ./ctl.sh test"
+        )
+    client: Redis = from_url(settings.redis_url, decode_responses=True)
+    await client.flushdb()
     try:
-        yield db_engine
+        yield client
     finally:
-        await _truncate_memory_tables(db_engine)
+        await client.flushdb()
+        await client.aclose()

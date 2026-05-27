@@ -6,12 +6,10 @@ Single source of truth for open work, in order. Move items between sections; del
 
 ## In progress
 
-_(none — Phase 0 complete 2026-05-27; Phase 1 is next)_
+### Phase 1 — Memory spine  →  `plan/phase-1-memory-spine.md`  ⟵ team `johnny5-phase-1`
+Four memory stores (working/episodic/semantic/procedural), embedding-based hybrid recall, episodic write path, consolidation stub. No cognition yet — a memory you can write to and query. **Done = Johnny can remember and recall.**
 
 ## Next
-
-### Phase 1 — Memory spine  →  `plan/phase-1-memory-spine.md`
-Four memory stores (working/episodic/semantic/procedural), embedding-based hybrid recall, episodic write path, consolidation stub. No cognition yet — a memory you can write to and query. **Done = Johnny can remember and recall.**
 
 ### Phase 2 — Heartbeat + Workspace  →  `plan/phase-2-heartbeat.md`
 The Global Workspace event bus + the cognitive cycle loop + the Inner Narrator. Johnny produces a continuous stream of consciousness, visible in the REPL. **Done = the first "he's alive" moment.**

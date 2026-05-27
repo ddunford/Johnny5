@@ -65,3 +65,13 @@
 **Steps:** Full suite 3× in-network. Run an idle stretch and watch the action cadence.
 **Expected:** Phases 2–6a green; an idle curious Johnny respects the per-tick action cadence + the budget gate (doesn't hammer SearXNG/Groq every tick). 3× deterministic.
 **Status:** ⬜
+
+### TC-6b.13: AuditPanel renders the durable action_log trail (UI integration, browser)
+**Steps:** In a real browser (Playwright against a running stack, NOT mocked routes), open the view that hosts the AuditPanel. Test BOTH states: (a) **empty** — a fresh stack where no tool has run yet (`GET /api/v1/audit/actions` → `{actions: []}`); (b) **populated** — after dispatching a tool action (e.g. a `note` write), reload.
+**Expected:** (a) Empty-state: the panel renders an empty/"no actions yet" state with **zero console errors** — NOT a blank screen or `Cannot read properties of undefined`/`Cannot convert undefined or null to object`. (b) Populated: the durable rows render (tool, verdict, ts, success; veto rows show the reason; secrets show `[REDACTED]`, never the raw value). This is browser-rendered, not an API status check.
+**Status:** ⬜
+
+### TC-6b.14: `/audit/actions` service adapter contract test + fresh-load smoke (contract pinning)
+**Steps:** (1) Contract test — feed the frontend audit-actions service adapter a **captured** `ActionAuditResponse` wire fixture under `frontend/.../fixtures/` (captured via `curl` against the running stack, NOT hand-authored), in BOTH the populated and the **empty `{actions: []}`** shapes; assert the adapter projects each without throwing. (2) Fresh-load smoke — against an actually-running backend (real responses, not Playwright route mocks), load the app cold and land on the audit view with an empty durable trail; assert no console errors.
+**Expected:** The adapter handles the real wire shape incl. the empty default (the panel's first-ever load has zero rows); the interface is pinned to a captured fixture (a server-side rename of `ActionAuditResponse` breaks the contract test, not production). Empty-state is covered explicitly, not just the populated path.
+**Status:** ⬜

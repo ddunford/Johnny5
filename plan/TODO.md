@@ -10,7 +10,7 @@ _(none — Phase 6a complete; 6b is next)_
 
 ## Next
 
-### Phase 6b — Tool belt (the curiosity loop) → `plan/phase-6b-tool-belt.md` (14 tasks, backend + devops + qa + lead-security)
+### Phase 6b — Tool belt (the curiosity loop) → `plan/phase-6b-tool-belt.md` (15 tasks, backend + devops + frontend + qa + lead-security)
 The world-touching tools on 6a's now-shipped vetted substrate (Conscience CHECK + `EffectorDispatch` ACT + append-only `action_log` + budget hard-gate + redaction — all live): `web_search`/`web_fetch`(**SSRF-hardened**)/`news` (the primary curiosity feed → consolidated into memory), `code_exec` (**escape-resistant sandbox container**), `note`, `schedule_wakeup`, `memory_search/write`; Deliberation extended to pick external tools; AuditPanel renders the durable `action_log` trail (6b.14 — backend read already shipped in 6a). **The curiosity loop goes live: idle → reads the world → remembers → drive eased.** Carries 2 LOW advisories from the 6a security review (Conscience prompt-injection from fetched content; redaction of novel secret shapes) into `TASK-6b.13`.
 
 **Done = he can act on the world, safely.** Run `/plan-review phase 6b` then `/team-execute phase 6b`. **Out of scope (later phases):** messaging/outward-contact (P8), self-ops + self-code edits (P9), social presence (post-v1).

@@ -1,19 +1,19 @@
-"""Live guard that the metacognition review fits its token budget (TC-4.9 live leg).
+"""Live guard that the metacognition review works on its PRIMARY path — Groq (TC-4.9).
 
-The deterministic contract tests feed representative envelopes through the parser,
-so they pass regardless of the real token budget. This is the one thing they can't
-cover: that the **real** ``metacognition`` path returns a non-empty, parseable
-``Review`` rather than a truncated empty body.
+The `metacognition` role is **cloud-first**: Groq (`llama-3.3-70b-versatile`) is the
+production path and returns a clean `Review` JSON. This leg hits that path directly
+and asserts the real request fits the token budget (`finish=stop`) and projects
+through `parse_review`.
 
-The ``metacognition`` role is cloud-first (Groq) with the local **qwen** reasoning
-model as fallback. The token-budget trap (lessons.md) lives on the reasoning model:
-under a JSON-schema instruction qwen emits a long reasoning preamble *before* the
-JSON, so too small a ``metacognition_max_tokens`` truncates mid-reasoning
-(``finish_reason="length"``, ``content=""``) → schema failover → the review silently
-degrades to empty every sleep. This leg hits the qwen path directly at the configured
-budget and fails if it truncates — same family as ``test_affect_live.py``.
+The local qwen fallback is a *reasoning* model whose chain-of-thought rambles non-
+deterministically on structured output (can exhaust any sane `max_tokens`) — the
+"tired" degradation (SPEC §10), not a token-guard target. The qwen-fallback path is
+covered by the **deterministic** graceful-degradation test
+`test_metacognition.py::test_tired_review_writes_no_notes` (tired → empty review, no
+notes), plus the sleep-level all-LLM-unavailable test in `test_sleep_cycle.py`.
+(`/no_think` for reliable local structured output is the Phase-6 item.)
 
-Marked ``live`` (deselected unless ``--run-live``):
+Marked ``live`` (deselected unless ``--run-live``); real Groq call:
 
     ./ctl.sh test -m live --run-live tests/metacognition/test_metacognition_live.py
 """
@@ -23,7 +23,7 @@ from __future__ import annotations
 import pytest
 
 from brain.llm.base import Message
-from brain.llm.providers.ollama import OllamaProvider
+from brain.llm.providers.groq import GroqProvider
 from brain.metacognition.agent import Metacognition, ReviewWindow, parse_review
 from foundation.config import Settings
 
@@ -42,7 +42,7 @@ _WINDOW = ReviewWindow(
 )
 
 
-async def test_live_metacognition_review_fits_the_token_budget() -> None:
+async def test_live_metacognition_review_on_groq_fits_the_budget_and_parses() -> None:
     settings = Settings()
     agent = Metacognition()  # loads the real prompt; no router/DB needed to render
     messages = [
@@ -50,11 +50,11 @@ async def test_live_metacognition_review_fits_the_token_budget() -> None:
         Message(role="user", content=agent._render(_WINDOW)),
     ]
 
-    provider = OllamaProvider(settings)
+    provider = GroqProvider(settings)  # the role's PRIMARY provider (production path)
     try:
         completion = await provider.complete(
             messages,
-            model=settings.local_reasoning_model,  # the qwen fallback — the trap-prone path
+            model=settings.groq_model,
             temperature=_TEMPERATURE,
             max_tokens=settings.metacognition_max_tokens,
             response_format=_JSON_RESPONSE_FORMAT,
@@ -63,12 +63,8 @@ async def test_live_metacognition_review_fits_the_token_budget() -> None:
         await provider.aclose()
 
     assert completion.finish_reason != "length", (
-        "metacognition completion truncated (finish_reason=length) — "
-        "metacognition_max_tokens too small for qwen's reasoning preamble (see lessons.md)"
+        "metacognition truncated on Groq (finish=length) — metacognition_max_tokens too small"
     )
-    assert completion.content.strip(), (
-        "metacognition completion empty — bump metacognition_max_tokens; qwen spent the "
-        "budget on its reasoning channel before emitting the JSON Review"
-    )
+    assert completion.content.strip(), "metacognition completion empty on Groq"
     review = parse_review(completion.content)
     assert review.reflection.strip()

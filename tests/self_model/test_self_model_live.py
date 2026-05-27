@@ -1,21 +1,19 @@
-"""Live guard that the self-model refresh fits its token budget (TC-4.9 live leg).
+"""Live guard that the self-model refresh works on its PRIMARY path — Groq (TC-4.9).
 
-The deterministic contract tests feed CAPTURED/representative envelopes through the
-parser, so they pass regardless of the real model's token budget. This is the one
-thing they can't cover: that the **real** ``self_model`` path returns a non-empty,
-parseable ``IdentityDelta`` rather than a truncated empty body.
+The `self_model` role is **cloud-first**: Groq (`llama-3.3-70b-versatile`) is the
+production path and returns a clean `IdentityDelta` JSON. This leg hits that path
+directly and asserts the real request fits the token budget (`finish=stop`) and
+projects through `parse_identity_delta`.
 
-The ``self_model`` role is cloud-first (Groq) with the local **qwen** reasoning model
-as fallback. The token-budget trap (lessons.md) lives on the reasoning model: under
-a JSON-schema instruction qwen emits a long reasoning preamble *before* the JSON, so
-too small a ``self_model_max_tokens`` truncates mid-reasoning (``finish_reason="length"``,
-``content=""``) → schema failover → the refresh silently degrades to "keep current"
-every sleep. This leg hits the qwen path directly at the configured budget and fails
-if it truncates — the same regression guard as ``test_affect_live.py`` but on the
-reasoning model this role actually falls back to.
+The local qwen fallback is a *reasoning* model whose chain-of-thought rambles non-
+deterministically on structured output (can exhaust any sane `max_tokens`) — that's
+the "tired" degradation (SPEC §10), not a token-guard target. The qwen-fallback path
+is covered by the **deterministic** graceful-degradation test
+`test_self_model.py::test_tired_refresh_keeps_the_current_version` (tired → no new
+version), plus the sleep-level all-LLM-unavailable test in `test_sleep_cycle.py`.
+(`/no_think` to make qwen reliable for local structured output is the Phase-6 item.)
 
-Marked ``live`` (deselected unless ``--run-live``). Talks to real inference.lan; no
-DB needed (it exercises the provider call, not the persisted version):
+Marked ``live`` (deselected unless ``--run-live``); real Groq call:
 
     ./ctl.sh test -m live --run-live tests/self_model/test_self_model_live.py
 """
@@ -25,7 +23,7 @@ from __future__ import annotations
 import pytest
 
 from brain.llm.base import Message
-from brain.llm.providers.ollama import OllamaProvider
+from brain.llm.providers.groq import GroqProvider
 from brain.self_model.agent import ReflectionInputs, SelfModel, parse_identity_delta
 from brain.self_model.store import (
     INITIAL_RELATIONSHIPS,
@@ -63,7 +61,7 @@ def _seed_inputs() -> tuple[IdentityDoc, ReflectionInputs]:
     return current, inputs
 
 
-async def test_live_self_model_refresh_fits_the_token_budget() -> None:
+async def test_live_self_model_refresh_on_groq_fits_the_budget_and_parses() -> None:
     settings = Settings()
     agent = SelfModel()  # loads the real prompt + anchor; no router/DB needed to render
     current, inputs = _seed_inputs()
@@ -72,11 +70,11 @@ async def test_live_self_model_refresh_fits_the_token_budget() -> None:
         Message(role="user", content=agent._render(current, inputs)),
     ]
 
-    provider = OllamaProvider(settings)
+    provider = GroqProvider(settings)  # the role's PRIMARY provider (production path)
     try:
         completion = await provider.complete(
             messages,
-            model=settings.local_reasoning_model,  # the qwen fallback — the trap-prone path
+            model=settings.groq_model,
             temperature=_TEMPERATURE,
             max_tokens=settings.self_model_max_tokens,
             response_format=_JSON_RESPONSE_FORMAT,
@@ -85,13 +83,8 @@ async def test_live_self_model_refresh_fits_the_token_budget() -> None:
         await provider.aclose()
 
     assert completion.finish_reason != "length", (
-        "self-model completion truncated (finish_reason=length) — self_model_max_tokens "
-        "too small for qwen's reasoning preamble (see lessons.md)"
+        "self-model completion truncated on Groq (finish=length) — self_model_max_tokens too small"
     )
-    assert completion.content.strip(), (
-        "self-model completion empty — bump self_model_max_tokens; qwen spent the budget "
-        "on its reasoning channel before emitting the JSON IdentityDelta"
-    )
-    # The real content parses into a valid delta end-to-end (not just on fixtures).
+    assert completion.content.strip(), "self-model completion empty on Groq"
     delta = parse_identity_delta(completion.content)
     assert delta.self_model_doc.strip()

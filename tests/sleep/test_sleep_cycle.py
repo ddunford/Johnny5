@@ -31,7 +31,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from brain.drives.engine import SLEEP_DRIVE, DriveEngine, DriveStateRow, Urge
-from brain.llm.base import Completion, Message
+from brain.llm.base import Completion, LLMUnavailableError, Message
 from brain.memory.consolidator import ConsolidationSummary, Consolidator
 from brain.memory.episodic import Episode, EpisodicMemory
 from brain.memory.semantic import SemanticMemory
@@ -81,6 +81,16 @@ class _SleepRouter:
 class _StubPrompt:
     def load_prompt(self, name: str) -> str:
         return "Do the thing and return the required JSON."
+
+
+class _TiredRouter:
+    """Every call raises — simulates Groq + qwen both unavailable (the agents catch
+    this and fall back, so it exercises graceful degradation across the pipeline)."""
+
+    async def complete(
+        self, role: str, messages: Sequence[Message], **_kwargs: object
+    ) -> Completion:
+        raise LLMUnavailableError(role)
 
 
 class _BrokenConsolidator:
@@ -309,3 +319,53 @@ async def test_a_successful_backup_eases_the_continuity_drive(
     continuity = await _drive_value("continuity")
     assert continuity < 0.95  # eased
     assert continuity < 0.85  # back under threshold — the will-to-live is reassured
+
+
+async def test_sleep_completes_and_wakes_when_every_llm_is_unavailable(
+    sleep_db: AsyncEngine, redis_client: Redis, tmp_path: Path
+) -> None:
+    """Groq + qwen both down: every sleep agent degrades to its deterministic fallback
+    and the sleep still completes + wakes intact (the 'tired' degradation, SPEC §10).
+    This is the reliable deterministic counterpart to the Groq `@live` token-budget
+    guards — it proves the fallback path the cloud-first roles rely on actually works."""
+    embedder = DeterministicEmbedder()
+    await _seed_two_episodes_one_theme(embedder)
+    await DriveEngine(now_fn=_now).bootstrap()
+
+    tired = _TiredRouter()
+    consolidator = Consolidator(
+        SemanticMemory(embedder),
+        router=tired,  # type: ignore[arg-type]
+        config_store=_StubPrompt(),  # type: ignore[arg-type]
+    )
+    self_model = SelfModel(
+        router=tired,  # type: ignore[arg-type]
+        store=IdentityStore(),
+        config_store=_StubPrompt(),  # type: ignore[arg-type]
+    )
+    metacognition = Metacognition(
+        router=tired,  # type: ignore[arg-type]
+        store=MetacognitionStore(),
+        config_store=_StubPrompt(),  # type: ignore[arg-type]
+    )
+    cycle = SleepCycle(
+        consolidator=consolidator,
+        self_model=self_model,
+        metacognition=metacognition,
+        snapshot=MemorySnapshot(root=tmp_path, working=WorkingMemory(redis=redis_client)),
+        drives=DriveEngine(now_fn=_now),
+        now_fn=_now,
+    )
+
+    report = await cycle.sleep(trigger=TRIGGER_ENERGY, now=_T0)
+
+    assert report is not None
+    assert cycle.is_asleep is False  # woke — never wedged asleep
+    assert report.self_check_ok is True  # intact v1 self-model + in-range drives
+    # Tired ≠ a raised stage error — each agent caught LLMUnavailable and fell back,
+    # so no stage "degraded"; the pipeline ran clean on the fallback path.
+    assert report.degraded_stages == []
+    assert report.facts_written == 1  # consolidation → its deterministic fallback fact
+    assert report.self_model_version == 1  # self-model kept current (no LLM refresh)
+    assert await MetacognitionStore().recent(limit=10) == []  # metacognition → empty review
+    assert report.snapshot_path is not None  # the backup still ran

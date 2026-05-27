@@ -38,8 +38,14 @@ THOUGHT_TABLE = "thought"
 NARRATOR_AGENT_NAME = "narrator"
 NARRATOR_ROLE = "narrator"
 
-# A thought is short; gemma4 emits clean content, so a modest ceiling is plenty.
-_MAX_TOKENS = 220
+# The thought itself is short, but under the reflective persona + json_object
+# response format gemma4 behaves like a *thinking* model: it emits a chain-of-
+# thought in a separate `reasoning` channel BEFORE the JSON `content`. A low
+# ceiling lets that preamble eat the whole budget (finish_reason=length, empty
+# content → schema fails → silent "tired"), the exact trap lessons.md flags for
+# qwen. So the budget must cover reasoning + the JSON thought (qa verified 800
+# suffices; 1024 leaves headroom). The adapter still reads content-first.
+_MAX_TOKENS = 1024
 _TEMPERATURE = 0.8
 
 

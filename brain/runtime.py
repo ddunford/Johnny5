@@ -23,6 +23,7 @@ from brain.agents.memory_stages import EpisodicLearner, MemoryRecaller
 from brain.agents.narrator import Narrator
 from brain.agents.sensorium import Sensorium
 from brain.cycle import CognitiveCycle
+from brain.cycle_control import CycleControlListener
 from brain.llm.router import LLMRouter, build_router
 from brain.memory.working import WorkingMemory
 from brain.workspace import Workspace
@@ -47,21 +48,25 @@ class CognitiveRuntime:
         self.registry = registry
         self.router = router
         self.cycle = cycle
+        self._control = CycleControlListener(cycle)
         self._bus_task: asyncio.Task[None] | None = None
         self._cycle_task: asyncio.Task[None] | None = None
+        self._control_task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
-        """Start the bus listener and the heartbeat as background tasks."""
+        """Start the bus listener, heartbeat, and REPL control listener."""
         self.registry.attach(self.workspace)
         self._bus_task = asyncio.create_task(self.workspace.run(), name="workspace-bus")
         self._cycle_task = asyncio.create_task(self.cycle.run(), name="cognitive-cycle")
+        self._control_task = asyncio.create_task(self._control.run(), name="cycle-control")
         _log.info("runtime.started", agents=self.registry.names())
 
     async def stop(self) -> None:
-        """Stop the heartbeat and bus listener, then release the router."""
+        """Stop the heartbeat, bus, and control listeners, then release the router."""
         self.cycle.stop()
         self.workspace.stop()
-        for task in (self._cycle_task, self._bus_task):
+        self._control.stop()
+        for task in (self._cycle_task, self._bus_task, self._control_task):
             if task is None:
                 continue
             task.cancel()

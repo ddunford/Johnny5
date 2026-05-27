@@ -157,6 +157,12 @@ cmd_db() {            # Interactive psql into the dev database
     dc exec postgres psql -U "${POSTGRES_USER:-johnny5}" -d "${POSTGRES_DB:-johnny5}"
 }
 
+cmd_repl() {          # Open the cockpit: watch Johnny think, speak to him, pause/step
+    log_info "Attaching cockpit (Ctrl-D to leave; Johnny keeps thinking)..."
+    # Interactive (-it) so the consciousness feed streams and stdin reaches him.
+    dc exec api uv run --frozen python -m repl
+}
+
 cmd_migrate() {       # Apply database migrations (alembic upgrade head)
     log_info "Bringing postgres up for migrations..."
     dc up -d postgres
@@ -224,6 +230,7 @@ $(printf '%bApp / data%b' "$GREEN" "$NC")
   test [pytest args] Run the suite against johnny5_test         ${DIM}(dev only)${NC}
   shell [svc]        Shell into a container (default: api)
   db                 Interactive psql into the dev database
+  repl               Open the cockpit: watch him think, speak, pause/step
   health             Probe GET /api/health and show status
   reset              Wipe all data and start fresh              ${DIM}(dev only)${NC}
 
@@ -250,6 +257,7 @@ main() {
         test)     cmd_test "$@" ;;
         shell)    cmd_shell "$@" ;;
         db)       cmd_db "$@" ;;
+        repl)     cmd_repl "$@" ;;
         health)   cmd_health "$@" ;;
         reset)    cmd_reset "$@" ;;
         help|-h|--help) cmd_help ;;

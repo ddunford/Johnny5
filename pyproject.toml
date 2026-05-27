@@ -35,7 +35,7 @@ build-backend = "hatchling.build"
 # `brain` is the self-modifiable Mind, `foundation` is shared infra both depend
 # on, and `johnny` is the running host (ASGI app + API surface).
 [tool.hatch.build.targets.wheel]
-packages = ["johnny", "core", "brain", "foundation"]
+packages = ["johnny", "core", "brain", "foundation", "repl"]
 
 [tool.ruff]
 line-length = 100

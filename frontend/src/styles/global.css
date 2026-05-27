@@ -669,6 +669,126 @@ a {
   color: var(--text-faint);
 }
 
+/* ── Memory ──────────────────────────────────────────────── */
+.mem-section {
+  margin-top: 24px;
+}
+
+.mem-section:first-of-type {
+  margin-top: 0;
+}
+
+.mem-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.mem-section__heading {
+  margin: 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+.mem-search {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 8px 12px;
+  min-width: 240px;
+  flex: 1;
+  max-width: 360px;
+}
+
+.mem-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.mem-episodes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mem-episode {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.mem-episode__head {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+}
+
+.mem-episode__kind {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.mem-episode__content {
+  margin: 0 0 8px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mem-episode__meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-dim);
+  align-items: center;
+}
+
+.mem-tag {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  text-transform: capitalize;
+}
+
+.mem-facts {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mem-fact {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.mem-fact__conf,
+.mem-fact__score,
+.mem-episode__score {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
 .panel__empty {
   color: var(--text-faint);
   font-style: italic;

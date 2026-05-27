@@ -36,7 +36,7 @@ Verified end-to-end on **2026-05-26** by probing + SSH. This supersedes the orig
 | 8004 | OCR | text-in-images | later |
 | 8880 | **Kokoro TTS** (`/v1/audio/speech`, 26 voices) | voice out | 7 |
 | 8890 | **Speaches STT** (`/v1/audio/transcriptions`) | voice in | 7 |
-| 8889 | SearXNG | web/news search (no API key) | 6 |
+| 8889 | SearXNG | web/news search (no API key) — **JSON output enabled** (`search.formats: [html, json]`, set 2026-05-27; `?format=json` → 200). **Engine caveat:** `duckduckgo` returns 0 results from this box (flaky upstream) + the default/empty engine set times out — pass an explicit `engines=google,bing,brave` (or a category). Result obj keys: `url,title,content,engine,publishedDate,score,…`. | 6 |
 | 6333 | Qdrant | optional alt vector store | (memory alt) |
 
 ## Status of verification

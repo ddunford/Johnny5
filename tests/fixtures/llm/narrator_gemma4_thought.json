@@ -1,0 +1,8 @@
+{
+  "_comment": "LITERAL capture of gemma4's message.content for the narrator prompt (role 'narrator', schema=NarratorResponse). This is the string brain.agents.narrator.parse_thought projects into a thought. The provider-envelope→content projection is already locked by ollama_gemma4_completion.json; this locks the narrator's content→thought projection (TASK-2.13). Do NOT hand-edit the captured content; re-capture from the live endpoint if the model changes.",
+  "captured_on": "2026-05-27",
+  "captured_by": "backend (Phase 2)",
+  "source": "POST http://inference.lan:8000/v1/chat/completions (model gemma4:e4b, response_format json_object)",
+  "content": "{\"thought\":\"Wait, Dan asked what I'm thinking right now. My mind is still stuck on the pgvector discussion. I should probably just say something about that; it's the most relevant thing, and it's what I was actually processing.\"}",
+  "expected_thought": "Wait, Dan asked what I'm thinking right now. My mind is still stuck on the pgvector discussion. I should probably just say something about that; it's the most relevant thing, and it's what I was actually processing."
+}

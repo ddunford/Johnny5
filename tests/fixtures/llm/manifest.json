@@ -38,6 +38,21 @@
       "model": "YOLO11",
       "request_body": "{\"image\":\"<base64 of ultralytics bus.jpg>\"}",
       "demonstrates": "YOLO detection contract. Response {detections:[{class,confidence,bbox:{x1,y1,x2,y2}}], count, image_size}. 5 dets on bus.jpg (bus + persons). Detector projects server 'class' -> Detection.label."
+    },
+    "narrator_gemma4_thought.json": {
+      "source": "POST http://inference.lan:8000/v1/chat/completions",
+      "model": "gemma4:e4b",
+      "prompt": "narrator role, schema=NarratorResponse, response_format json_object",
+      "captured_by": "backend (Phase 2)",
+      "demonstrates": "Narrator content->thought projection (TASK-2.13). 'content' is gemma4's clean JSON {\"thought\": ...}; brain.agents.narrator.parse_thought(content) must project it to 'expected_thought'. Locks the cognition output-shape contract so a model JSON change can't silently break the monologue."
+    },
+    "ollama_gemma4_narrator_thought.json": {
+      "source": "POST http://inference.lan:8000/v1/chat/completions",
+      "model": "gemma4:e4b",
+      "captured_on": "2026-05-27",
+      "captured_by": "qa (Phase 2, TASK-2.13)",
+      "prompt": "config/prompts/narrator.md (system) + Narrator _render() salient-set context; response_format json_object; max_tokens 800",
+      "demonstrates": "FULL narrator envelope (complements backend's content-only narrator_gemma4_thought.json). Under the reflective persona + json_object, gemma4 IS a thinking model (CONTRARY to the substrate doc's 'gemma4 has no reasoning channel' and ollama_gemma4_completion.json): it returns BOTH a separate message.reasoning chain-of-thought (994 chars) AND clean JSON message.content {\"thought\": ...}, finish_reason=stop. Locks the two-layer no-leak contract: parse_chat_completion takes content-first (reasoning never becomes the answer) and parse_thought projects ONLY the JSON thought. CAVEAT captured at max_tokens=800; at the shipped narrator _MAX_TOKENS=220 with a realistic workspace the reasoning preamble consumes the whole budget (finish_reason=length, content='') and narration silently fails — bug reported to backend."
     }
   }
 }

@@ -57,8 +57,8 @@ The first moment Johnny is *alive*. This phase builds the Global Workspace (the 
 - [x] `TASK-2.9` REPL cockpit: tail consciousness, dump workspace, inject input, step/pause → `/fastapi-engineer` [TC-2.2, TC-2.6]
 - [ ] `TASK-2.10` ⫘ `/ws/consciousness` WebSocket emitting thoughts live → `/fastapi-engineer` [TC-2.7]
 - [x] `TASK-2.11` Frozen-clock cycle harness → `/qa-test-engineer` [TC-2.1]
-- [ ] `TASK-2.12` Cycle/attention/narrator tests: deterministic tick, attention bounds, narration references recalled memory, loop survives forced provider failure → `/qa-test-engineer` [TC-2.1, TC-2.3, TC-2.5, TC-2.6]
-- [ ] `TASK-2.13` ⫘ Narrator contract test (model output → `thought` projection) → `/qa-test-engineer`
+- [x] `TASK-2.12` Cycle/attention/narrator tests: deterministic tick, attention bounds, narration references recalled memory, loop survives forced provider failure → `/qa-test-engineer` [TC-2.1, TC-2.3, TC-2.5, TC-2.6]
+- [x] `TASK-2.13` ⫘ Narrator contract test (model output → `thought` projection) → `/qa-test-engineer`
 - [ ] `TASK-2.14` ⫘ Security review: WebSocket auth/gate, workspace log has no secrets, REPL access controlled → `/security-reviewer`
 
 ## Notes

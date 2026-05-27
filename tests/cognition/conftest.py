@@ -23,25 +23,37 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from brain.workspace import Workspace
 
-# The Phase-2 heartbeat tables. Truncated children-first; CASCADE + RESTART
-# IDENTITY leaves each empty with ids reset for deterministic assertions.
-_WORKSPACE_TABLES = ("percept", "thought", "workspace_event")
+# Every table a tick can touch: the Phase-2 heartbeat tables (percept/thought/
+# workspace_event) plus the Phase-1 memory tables, because the cycle's RECALL
+# stage reads episodes/facts and its LEARN stage *writes* an episode — so a
+# cognition test must start from a clean memory slate too, not just an empty bus.
+# Truncated children-first (edges → facts); CASCADE + RESTART IDENTITY leaves each
+# empty with ids reset for deterministic assertions.
+_HEARTBEAT_TABLES = (
+    "semantic_edge",
+    "semantic_fact",
+    "skill",
+    "episode",
+    "percept",
+    "thought",
+    "workspace_event",
+)
 
 
 @pytest_asyncio.fixture
 async def workspace_db(_migrated_test_db: None) -> AsyncIterator[AsyncEngine]:
-    """A clean workspace schema on a fresh, loop-local global engine.
+    """A clean heartbeat schema on a fresh, loop-local global engine.
 
-    The workspace persists through ``session_scope()`` (the process-global
-    engine), so installing a loop-local engine here is what lets ``broadcast``
-    write under test. Tables start and end empty.
+    The workspace + memory stores persist through ``session_scope()`` (the
+    process-global engine), so installing a loop-local engine here is what lets
+    ``broadcast`` and episodic writes run under test. Tables start and end empty.
     """
     engine = install_fresh_global_engine()
-    await truncate_tables(_WORKSPACE_TABLES)
+    await truncate_tables(_HEARTBEAT_TABLES)
     try:
         yield engine
     finally:
-        await truncate_tables(_WORKSPACE_TABLES)
+        await truncate_tables(_HEARTBEAT_TABLES)
         await dispose_global_engine()
 
 

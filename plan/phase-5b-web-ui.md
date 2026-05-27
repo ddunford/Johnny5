@@ -70,7 +70,7 @@ The first time Johnny becomes *visible*. Phase 5b builds the React + Vite SPA th
 - [x] `TASK-5b.8` ⫘ State dashboard — drive bars + mood + goal + interval + awake/asleep + ⚠DEGRADED + self-model version + last-sleep (from `stateSocket`) → `/frontend-react-architect` [TC-5b.3]
 - [x] `TASK-5b.9a` ⫘ Memory browser panel (episodic recent + search, semantic facts) → `/frontend-react-architect` [TC-5b.4]
 - [x] `TASK-5b.9b` ⫘ Audit panel (bus/event log, `action.dispatched` highlighted, type filter) → `/frontend-react-architect` [TC-5b.5]
-- [ ] `TASK-5b.10` ⫘ Self panel (identity doc + values/concerns/relationships + latest reflections; read-only, labelled Phase-9 placeholder for approvals) → `/frontend-react-architect` [TC-5b.6]
+- [x] `TASK-5b.10` ⫘ Self panel (identity doc + values/concerns/relationships + latest reflections; read-only, labelled Phase-9 placeholder for approvals) → `/frontend-react-architect` [TC-5b.6]
 - [x] `TASK-5b.11` `web` nginx service serving the Vite build + Traefik routing (`/`→web, `/api`+`/ws`→api, priorities); `ctl.sh` build/up; Vite dev proxy → `/devops-deployment-engineer` [TC-5b.9]
 - [ ] `TASK-5b.12` ⫘ Vitest component tests (panels render given mocked hooks; error boundary catches a thrown panel; empty-state renders) → `/frontend-react-architect` [TC-5b.1..5b.6]
 - [ ] `TASK-5b.13` ⫘ Playwright E2E: per-panel render + the **conversation round-trip** (type → percept → a thought returns) + navigation + WS reconnect + token-reject → re-prompt → `/qa-test-engineer` [TC-5b.1, TC-5b.2, TC-5b.7]

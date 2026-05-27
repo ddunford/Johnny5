@@ -861,6 +861,141 @@ a {
   }
 }
 
+/* ── Self ────────────────────────────────────────────────── */
+.self-identity__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.self-identity__name {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.self-doc {
+  margin: 0 0 20px;
+  line-height: 1.7;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.self-subheading {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  margin: 20px 0 10px;
+}
+
+.self-chips {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.self-chip {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+}
+
+.self-empty {
+  color: var(--text-faint);
+  font-style: italic;
+  margin: 0;
+}
+
+.self-relationships {
+  margin: 0;
+}
+
+.self-relationship {
+  display: flex;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.self-relationship dt {
+  font-weight: 600;
+  min-width: 80px;
+}
+
+.self-relationship dd {
+  margin: 0;
+  color: var(--text-dim);
+}
+
+.self-section {
+  margin-top: 8px;
+}
+
+.self-notes {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.self-note {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.self-note__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+}
+
+.self-note__status {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.self-note__observation {
+  margin: 0 0 6px;
+  line-height: 1.5;
+}
+
+.self-note__proposal {
+  margin: 0;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.self-note__proposal-label {
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  margin-right: 6px;
+}
+
+.self-phase9 {
+  margin: 24px 0 0;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
 .panel__empty {
   color: var(--text-faint);
   font-style: italic;

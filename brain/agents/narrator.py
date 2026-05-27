@@ -29,6 +29,7 @@ from brain.config_store import ConfigStore, get_config_store
 from brain.llm.base import LLMUnavailableError, Message
 from brain.llm.router import LLMRouter
 from brain.workspace import WorkspaceEvent, WorkspaceItem
+from foundation.config import get_settings
 from foundation.db import Base, Repository, session_scope
 from foundation.observability import get_logger
 
@@ -43,9 +44,8 @@ NARRATOR_ROLE = "narrator"
 # thought in a separate `reasoning` channel BEFORE the JSON `content`. A low
 # ceiling lets that preamble eat the whole budget (finish_reason=length, empty
 # content → schema fails → silent "tired"), the exact trap lessons.md flags for
-# qwen. So the budget must cover reasoning + the JSON thought (qa verified 800
-# suffices; 1024 leaves headroom). The adapter still reads content-first.
-_MAX_TOKENS = 1024
+# qwen. The budget (settings.narrator_max_tokens) must cover reasoning + the JSON
+# thought; the adapter still reads content-first.
 _TEMPERATURE = 0.8
 
 
@@ -115,9 +115,13 @@ class Narrator:
         router: LLMRouter,
         *,
         config_store: ConfigStore | None = None,
+        max_tokens: int | None = None,
     ) -> None:
         self._router = router
         self.prompt = (config_store or get_config_store()).load_prompt(NARRATOR_AGENT_NAME)
+        self._max_tokens = (
+            max_tokens if max_tokens is not None else get_settings().narrator_max_tokens
+        )
 
     async def narrate(self, *, contents: Sequence[WorkspaceItem]) -> str | None:
         """Produce one first-person thought, or ``None`` when every provider is tired."""
@@ -131,7 +135,7 @@ class Narrator:
                 messages,
                 schema=NarratorResponse,
                 temperature=_TEMPERATURE,
-                max_tokens=_MAX_TOKENS,
+                max_tokens=self._max_tokens,
             )
         except LLMUnavailableError:
             # Fully tired — no thought this tick; the heartbeat continues.

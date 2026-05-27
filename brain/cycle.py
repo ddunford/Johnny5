@@ -40,7 +40,7 @@ from brain.affect.appraisal import Mood
 from brain.agents.attention import AttentionBias
 from brain.agents.deliberation import Action, ActionOutcome, DeliberationResult
 from brain.drives.engine import EVENT_INTERACTION, SLEEP_DRIVE, DriveEvent, DriveReading, Urge
-from brain.goals.store import Goal
+from brain.goals.store import Goal, goals_to_payload
 from brain.memory.working import WorkingMemory, WorkingMemoryItem
 from brain.workspace import Workspace, WorkspaceEvent, WorkspaceItem
 from foundation.observability import get_logger
@@ -53,6 +53,9 @@ _ERROR_BACKOFF_SECONDS = 1.0
 
 # The percept kind a fresh interaction arrives as (a high-salience input).
 _INPUT_KIND = "input"
+# The consolidated state-surface event the ``/ws/state`` channel + REPL read (FC-8):
+# one snapshot per tick of drives + mood + the active goal.
+STATE_EVENT = "state"
 # Drive → the percept kinds attending to it helps satisfy (the FC-7 bias slot):
 # an unmet Connection pulls toward fresh input; unmet Curiosity toward recall.
 _DRIVE_KIND_RELEVANCE: dict[str, tuple[str, ...]] = {
@@ -382,6 +385,7 @@ class CognitiveCycle:
         await self._stage(ctx, "check", self._check)
         await self._stage(ctx, "act", self._act)
         await self._stage(ctx, "learn", self._learn)
+        await self._stage(ctx, "state", self._broadcast_state)
 
         report = TickReport(
             tick=ctx.tick,
@@ -562,6 +566,37 @@ class CognitiveCycle:
                 },
                 stage="appraise",
             )
+
+    async def _broadcast_state(self, ctx: CycleContext) -> None:
+        """Emit the consolidated state snapshot for this tick (FC-8 state surface).
+
+        One stable-schema event per tick carrying drive levels, current mood, and
+        the active goal — what ``/ws/state`` and the REPL drive-bar view consume.
+        Emitted even with no drives/affect wired (empty fields), so the surface is
+        always present for a consumer to attach to.
+        """
+        await self._emit(
+            ctx,
+            "cycle",
+            STATE_EVENT,
+            {
+                "tick": ctx.tick,
+                "drives": [
+                    {
+                        "drive": d.drive,
+                        "value": round(d.value, 4),
+                        "setpoint": round(d.setpoint, 4),
+                        "threshold": round(d.threshold, 4),
+                        "over_threshold": d.over_threshold,
+                    }
+                    for d in ctx.drives
+                ],
+                "mood": self._mood_payload(ctx.mood) if ctx.mood is not None else None,
+                "goals": goals_to_payload([ctx.goal]) if ctx.goal is not None else [],
+                "interval": round(self._next_interval, 3),
+            },
+            stage="state",
+        )
 
     @staticmethod
     def _mood_payload(mood: Mood) -> dict[str, object]:

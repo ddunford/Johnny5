@@ -94,6 +94,19 @@ class Settings(BaseSettings):
     circuit_reset_seconds: float = Field(default=60.0)
     llm_schema_retries: int = Field(default=1)
 
+    # ── Deliberation (goal → internal action; the autonomy loop's act step) ──
+    # Deliberation is a heavy agent (SPEC §7: heavy modules fire on a slower
+    # sub-cadence to control cost). It *acts* on the active goal at most this often,
+    # so a pegged drive can't drive an action (and its LLM call) every single tick —
+    # the goal/action loop stays bounded (a 3.12 concern). Arbitration still runs
+    # every tick (cheap); only the action is throttled.
+    deliberation_min_interval_seconds: float = Field(default=20.0)
+    # Token ceiling for an internal reflection. Free-text (no json_object), so
+    # gemma4 returns clean prose without the reasoning-preamble trap.
+    deliberation_max_tokens: int = Field(default=320)
+    # How many memories a recall/consolidate action surfaces.
+    deliberation_recall_k: int = Field(default=4)
+
     # ── Goal arbitration (urge → goal, with anti-thrash hysteresis) ──
     # A promoted goal is held for at least this long before any competing urge can
     # displace it — the anti-thrash guard so Johnny doesn't flip-flop between
@@ -169,8 +182,10 @@ class Settings(BaseSettings):
     # ── Affect (appraisal → mood, SPEC §6.2) ──
     # Token ceiling for an LLM appraisal of a significant event. gemma4 emits a
     # reasoning preamble before the JSON (the lessons.md trap), so this must clear
-    # the preamble + the small appraisal object — 512 leaves headroom. Tunable (FC-3).
-    affect_max_tokens: int = Field(default=512)
+    # the preamble (~250) + the appraisal object. A live regression guard proved
+    # 512 gets eaten → empty content → silent appraisal failure; 1024 matches the
+    # narrator's proven headroom. Tunable (FC-3).
+    affect_max_tokens: int = Field(default=1024)
     # A feeling fades: mood deviation from the calm baseline halves every this many
     # seconds when nothing sustains it (so an excited spike mellows on its own).
     mood_halflife_seconds: float = Field(default=180.0)

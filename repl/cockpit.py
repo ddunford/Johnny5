@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from typing import Any, cast
 
 from brain.agents.sensorium import InputQueue
+from brain.cycle import STATE_EVENT
 from brain.cycle_control import PAUSE, RESUME, STEP, send_control
 from brain.workspace import Workspace, WorkspaceEvent
 from foundation.redis_client import close_redis
@@ -22,17 +24,21 @@ _THOUGHT = "thought"
 _PERCEPT = "percept"
 _TAIL_TYPES = (_THOUGHT, _PERCEPT)
 
+# Drive-bar rendering.
+_BAR_WIDTH = 24
+
 _BANNER = """\
 ╭─ Johnny 5 · cockpit ───────────────────────────────────────────────
 │  You're watching his stream of consciousness, live.
 │  Type a message + Enter to speak to him. Slash commands:
 │    /dump    show the current workspace + recent thoughts
+│    /state   show drive bars, mood, and active goal(s)
 │    /pause   pause the heartbeat      /resume  resume it
 │    /step    run exactly one tick     /help    this list
 │    /quit    leave (Johnny keeps thinking)
 ╰────────────────────────────────────────────────────────────────────"""
 
-_HELP = "commands: <message> = speak · /dump · /pause · /resume · /step · /help · /quit"
+_HELP = "commands: <message> = speak · /dump · /state · /pause · /resume · /step · /help · /quit"
 
 
 class Cockpit:
@@ -94,6 +100,8 @@ class Cockpit:
                 print(_HELP, flush=True)
             elif command == "/dump":
                 await self._dump()
+            elif command == "/state":
+                await self._state()
             elif command == "/pause":
                 await send_control(PAUSE)
                 print("⏸  paused", flush=True)
@@ -128,3 +136,57 @@ class Cockpit:
         else:
             print("│  (none yet)", flush=True)
         print("└──────────────────────────────────", flush=True)
+
+    async def _state(self) -> None:
+        """Render the latest state snapshot: drive bars, mood, and active goal(s)."""
+        events = await self._workspace.recent_events(1, type_filter=STATE_EVENT)
+        if not events:
+            print("(no state yet — is the heartbeat running with drives/affect wired?)", flush=True)
+            return
+        payload = events[0].payload
+
+        print("┌─ drives (pressure → threshold) ─", flush=True)
+        for drive in cast("list[dict[str, Any]]", payload.get("drives", [])):
+            print("│  " + self._drive_bar(drive), flush=True)
+
+        mood = cast("dict[str, Any] | None", payload.get("mood"))
+        if mood:
+            emotions = cast("dict[str, float]", mood.get("emotions") or {})
+            tags = ", ".join(f"{e} {v:.2f}" for e, v in emotions.items()) or "—"
+            print(
+                f"├─ mood: {mood.get('descriptor', '')}  "
+                f"(valence {mood.get('valence', 0):+.2f}, arousal {mood.get('arousal', 0):.2f})",
+                flush=True,
+            )
+            print(f"│  emotions: {tags}", flush=True)
+
+        goals = cast("list[dict[str, Any]]", payload.get("goals", []))
+        print("├─ active goal:", flush=True)
+        if goals:
+            for goal in goals:
+                print(
+                    f"│  ◆ [{goal.get('source')}] {goal.get('description')} "
+                    f"(priority {goal.get('priority', 0):.2f})",
+                    flush=True,
+                )
+        else:
+            print("│  (none — content for now)", flush=True)
+        interval = cast("float | None", payload.get("interval"))
+        if interval is not None:
+            print(f"├─ heartbeat interval: {interval:.2f}s", flush=True)
+        print("└──────────────────────────────────", flush=True)
+
+    @staticmethod
+    def _drive_bar(drive: dict[str, Any]) -> str:
+        """One drive as a labelled bar with a threshold marker and over-flag."""
+        value = float(drive.get("value", 0.0))
+        threshold = float(drive.get("threshold", 1.0))
+        filled = max(0, min(_BAR_WIDTH, round(value * _BAR_WIDTH)))
+        mark = max(0, min(_BAR_WIDTH - 1, round(threshold * _BAR_WIDTH)))
+        cells = ["█" if i < filled else "░" for i in range(_BAR_WIDTH)]
+        # Threshold marker (only when it doesn't sit on a filled leading cell).
+        if cells[mark] == "░":
+            cells[mark] = "┊"
+        bar = "".join(cells)
+        flag = " ▲" if drive.get("over_threshold") else "  "
+        return f"{drive.get('drive', ''):>10} │{bar}│ {value:.2f}{flag}"

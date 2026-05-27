@@ -66,12 +66,18 @@ export class ReconnectingSocket {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: ReconnectingSocketOptions) {
+    // Coalesce each defaulted field AFTER the spread: callers (the socket clients)
+    // pass `createWebSocket: <module var>` which is `undefined` in production (the
+    // factory is only set by the test seam). Object spread does NOT skip
+    // `undefined`, so a plain `...options` over the defaults would clobber them
+    // with `undefined` → `createWebSocket is not a function` on connect. `??`
+    // restores the real `new WebSocket(...)` default whenever a value is absent.
     this.options = {
-      createWebSocket: defaultCreateWebSocket,
-      getToken: defaultGetToken,
-      initialBackoffMs: 500,
-      maxBackoffMs: 8000,
       ...options,
+      createWebSocket: options.createWebSocket ?? defaultCreateWebSocket,
+      getToken: options.getToken ?? defaultGetToken,
+      initialBackoffMs: options.initialBackoffMs ?? 500,
+      maxBackoffMs: options.maxBackoffMs ?? 8000,
     };
     this.backoffMs = this.options.initialBackoffMs;
   }
@@ -110,7 +116,16 @@ export class ReconnectingSocket {
 
     this.options.onStatus(this.backoffMs === this.options.initialBackoffMs ? "connecting" : "reconnecting");
 
-    const socket = this.options.createWebSocket(buildWsUrl(this.options.path, token));
+    let socket: WebSocketLike;
+    try {
+      socket = this.options.createWebSocket(buildWsUrl(this.options.path, token));
+    } catch {
+      // Construction failed (e.g. WebSocket unavailable). Degrade gracefully and
+      // retry with backoff — a dead stream must NOT throw out of the effect and
+      // take the whole viewer down ("a dead panel must not kill the live view").
+      this.scheduleReconnect();
+      return;
+    }
     this.socket = socket;
 
     socket.onopen = () => {

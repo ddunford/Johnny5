@@ -201,3 +201,57 @@ describe("stateSocket", () => {
     expect(ws.closed).toBe(true);
   });
 });
+
+// Regression: in production the socket clients pass `createWebSocket: <module var>`
+// which is `undefined` (no test seam), so the wrapper MUST fall back to the real
+// global WebSocket — not let the `undefined` clobber the default and crash on
+// connect. The injected-factory tests above never exercise this real-WS path.
+describe("ReconnectingSocket · default factory (no injection)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("falls back to the real global WebSocket when no factory is injected", () => {
+    const created: string[] = [];
+    class StubWebSocket {
+      constructor(url: string) {
+        created.push(url);
+      }
+      close(): void {}
+    }
+    vi.stubGlobal("WebSocket", StubWebSocket);
+
+    const socket = new ReconnectingSocket({
+      path: "/ws/consciousness",
+      getToken: () => "tok",
+      onFrame: () => {},
+      onStatus: () => {},
+      onAuthReject: () => {},
+    });
+    expect(() => socket.start()).not.toThrow();
+    expect(created).toHaveLength(1);
+    expect(created[0]).toContain("/ws/consciousness");
+    socket.stop();
+  });
+
+  it("degrades to a backoff reconnect (no throw) when construction fails", () => {
+    vi.useFakeTimers();
+    const statuses: string[] = [];
+    class ThrowingWebSocket {
+      constructor() {
+        throw new Error("WebSocket unavailable");
+      }
+    }
+    vi.stubGlobal("WebSocket", ThrowingWebSocket);
+
+    const socket = new ReconnectingSocket({
+      path: "/ws/state",
+      getToken: () => "tok",
+      onFrame: () => {},
+      onStatus: (status) => statuses.push(status),
+      onAuthReject: () => {},
+    });
+    expect(() => socket.start()).not.toThrow();
+    expect(statuses).toContain("reconnecting");
+    socket.stop();
+    vi.useRealTimers();
+  });
+});

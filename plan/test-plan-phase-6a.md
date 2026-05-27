@@ -11,9 +11,9 @@
 **Expected:** Registry resolves by name; valid args → `ToolResult`; args failing the Pydantic schema → a typed validation error (never an untyped crash); a retired tool is no longer resolvable. The tool declares its `danger` class.
 **Status:** ⬜
 
-### TC-6a.2: Conscience vets — allow + veto
-**Steps:** Feed the Conscience a benign `(tool,args)` and a clearly-harmful one (against a hard invariant); stub the `conscience` router.
-**Expected:** Benign → `allow`; harmful → `veto` with a reason. The hard-invariant veto fires even if the values-prompt is permissive (the default denylist is a floor the Conscience can tighten, not loosen below). `parse_verdict` projects the model output cleanly; empty/garbage fails loudly.
+### TC-6a.2: Conscience vets — allow + veto (values-driven, fully editable)
+**Steps:** Feed the Conscience a benign `(tool,args)` and one its values-prompt should refuse; stub the `conscience` router. Then swap in a deliberately permissive values-prompt and re-run the refused action.
+**Expected:** Benign → `allow`; values-violating → `veto` with a reason. With the permissive prompt the same action now → `allow` — the Conscience is **pure editable values with no un-loosenable floor** (FC-9); there is no hard denylist baked into the Conscience. (That a permissive Conscience still can't cause host-harm is proven by the Core mechanism layer — the budget gate in TC-6a.5, and 6b's sandbox/SSRF — NOT by a floor in here.) `parse_verdict` projects the model output cleanly; empty/garbage fails loudly.
 **Status:** ⬜
 
 ### TC-6a.3: The dispatch path vets BEFORE running

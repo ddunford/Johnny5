@@ -196,6 +196,12 @@ class Workspace:
         """Register an in-process handler for an event ``type`` (``"*"`` = all)."""
         self._subscribers.setdefault(event_type, []).append(handler)
 
+    def unsubscribe(self, event_type: str, handler: EventHandler) -> None:
+        """Drop a previously-registered handler (so an agent can be retired, FC-2)."""
+        handlers = self._subscribers.get(event_type)
+        if handlers and handler in handlers:
+            handlers.remove(handler)
+
     def _handlers_for(self, event_type: str) -> list[EventHandler]:
         return [*self._subscribers.get(event_type, []), *self._subscribers.get("*", [])]
 

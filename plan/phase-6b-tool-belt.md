@@ -74,3 +74,4 @@ Every tool here is a `Tool` in 6a's registry, so it's automatically Conscience-v
 
 ## Carried-over advisories
 - The P3 (BudgetGovernor hard gate), P4 (`/no_think`), and P5a (no-secrets-on-bus) items are **resolved in Phase 6a** — confirm they're struck from `plan/TODO.md` cross-cutting before closing 6b. Any 6a/6b security finding deferred → land as `TASK-7.x`/`TASK-8.x` in the owning next-phase file (per the team-execute carry-over rule), not a loose note.
+- [ ] `TASK-6b.14` Frontend: AuditPanel renders the **durable `action_log` trail** (the Core-written, FC-1 audit read added in 6a.5), not just the live `workspace_event` bus feed. 6a exposed the durable trail as a token-gated API read (`ActionLogRepository`) but left the AuditPanel pointed at bus events (6a is backend-only). Pin the service adapter against a captured wire fixture (contract-test house rule) → `/frontend-react-architect` [TC-6b.11]

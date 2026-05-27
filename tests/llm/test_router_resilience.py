@@ -23,6 +23,7 @@ from typing import Any
 
 import pytest
 from helpers.clock import FrozenClock
+from pydantic import BaseModel
 
 from brain.llm.base import (
     Completion,
@@ -87,11 +88,56 @@ class MemoryCallLogger:
         self.records.append(entry)
 
 
+class ScriptedProvider:
+    """An LLMProvider that returns a fixed script of completions/exceptions.
+
+    Each ``complete`` call pops the next scripted item; an Exception item is
+    raised, a Completion item is returned. Used to drive the retry-with-feedback
+    path (invalid → valid JSON on the same provider) deterministically.
+    """
+
+    def __init__(self, name: str, script: list[Completion | Exception]) -> None:
+        self.name = name
+        self._script = list(script)
+        self.calls = 0
+
+    async def complete(
+        self,
+        messages: Sequence[Message],
+        *,
+        model: str,
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+        response_format: dict[str, Any] | None = None,
+        stop: list[str] | None = None,
+    ) -> Completion:
+        self.calls += 1
+        item = self._script.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    async def aclose(self) -> None:  # pragma: no cover - nothing to close
+        return None
+
+
+class _Answer(BaseModel):
+    """Minimal schema used to exercise the router's JSON validation + retry."""
+
+    answer: str
+
+
+def _completion(provider: str, content: str) -> Completion:
+    return Completion(content=content, provider=provider, model="m", completion_tokens=1)
+
+
 def _build_router(
-    groq: FakeProvider,
-    ollama: FakeProvider,
+    groq: LLMProvider,
+    ollama: LLMProvider,
     clock: FrozenClock,
     logger: CallLogger,
+    *,
+    schema_retries: int = 0,
 ) -> LLMRouter:
     routing = RoutingConfig(
         roles={
@@ -108,7 +154,7 @@ def _build_router(
         call_logger=logger,
         failure_threshold=THRESHOLD,
         reset_timeout=COOLDOWN,
-        schema_retries=0,
+        schema_retries=schema_retries,
         time_fn=clock,
     )
 
@@ -288,3 +334,55 @@ async def test_each_attempt_is_logged_including_failover() -> None:
     assert (GROQ, "error") in by_provider
     assert (OLLAMA, "ok") in by_provider
     assert all(r.role == ROLE for r in logger.records)
+
+
+# --------------------------------------------------------------------------- #
+# Retry-with-feedback + schema failover                                       #
+# --------------------------------------------------------------------------- #
+
+
+async def test_schema_failure_retries_same_provider_with_feedback() -> None:
+    """Invalid JSON then valid JSON → the router re-prompts the SAME provider
+    once and returns the valid completion (no failover)."""
+    logger = MemoryCallLogger()
+    groq = ScriptedProvider(
+        GROQ,
+        [_completion(GROQ, "this is not json"), _completion(GROQ, '{"answer": "ok"}')],
+    )
+    ollama = ScriptedProvider(OLLAMA, [_completion(OLLAMA, '{"answer": "local"}')])
+    router = _build_router(groq, ollama, FrozenClock(), logger, schema_retries=1)
+
+    completion = await router.complete(ROLE, [Message(role="user", content="ping")], schema=_Answer)
+
+    assert completion.provider == GROQ
+    assert completion.content == '{"answer": "ok"}'
+    assert groq.calls == 2  # retried the same provider once
+    assert ollama.calls == 0  # no failover needed
+    # Logged the bad attempt then the good one, both on groq.
+    assert [(r.provider, r.status) for r in logger.records] == [
+        (GROQ, "schema_error"),
+        (GROQ, "ok"),
+    ]
+
+
+async def test_schema_failure_fails_over_without_tripping_breaker() -> None:
+    """A provider that keeps producing invalid JSON exhausts its retries and the
+    router fails over — but the breaker stays CLOSED, because the transport was
+    healthy (bad output is not a provider outage)."""
+    logger = MemoryCallLogger()
+    groq = ScriptedProvider(
+        GROQ,
+        [_completion(GROQ, "nope one"), _completion(GROQ, "nope two")],
+    )
+    ollama = ScriptedProvider(OLLAMA, [_completion(OLLAMA, '{"answer": "local"}')])
+    router = _build_router(groq, ollama, FrozenClock(), logger, schema_retries=1)
+
+    completion = await router.complete(ROLE, [Message(role="user", content="ping")], schema=_Answer)
+
+    assert completion.provider == OLLAMA  # failed over to local
+    assert groq.calls == 2  # both schema attempts used
+    # Crucially: a schema failure must NOT trip the circuit.
+    assert router.circuit_states()[GROQ] is CircuitState.CLOSED
+    assert router.circuit_states()[OLLAMA] is CircuitState.CLOSED
+    statuses = [(r.provider, r.status) for r in logger.records]
+    assert statuses == [(GROQ, "schema_error"), (GROQ, "schema_error"), (OLLAMA, "ok")]

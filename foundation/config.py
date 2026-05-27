@@ -94,6 +94,18 @@ class Settings(BaseSettings):
     circuit_reset_seconds: float = Field(default=60.0)
     llm_schema_retries: int = Field(default=1)
 
+    # ── Goal arbitration (urge → goal, with anti-thrash hysteresis) ──
+    # A promoted goal is held for at least this long before any competing urge can
+    # displace it — the anti-thrash guard so Johnny doesn't flip-flop between
+    # curiosity and connection every tick (TC-3.6).
+    goal_min_dwell_seconds: float = Field(default=45.0)
+    # After the dwell, a challenger from a *different* drive must beat the
+    # incumbent's current priority by at least this margin to take over.
+    goal_hysteresis_margin: float = Field(default=0.15)
+    # Affect weighting on urge priority: priority = urgency·(1 + weight·arousal),
+    # so an activated Johnny pursues his strongest need more decisively.
+    goal_arousal_weight: float = Field(default=0.5)
+
     # ── Drives (homeostatic motivational core, SPEC §6) ──
     # Per-drive setpoints/rates/thresholds + the event→satisfaction map live in
     # this git-backed TOML, not in constants — they are exactly what Johnny

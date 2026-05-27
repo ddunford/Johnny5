@@ -53,8 +53,9 @@
 **Status:** ⬜
 
 ### TC-4.10: Wake self-check gates resume
-**Steps:** (a) Run a sleep with an intact self-model + anchor. (b) Tamper: blank/corrupt the latest self-model doc, then attempt wake. (c) Simulate an altered Core anchor name.
-**Expected:** (a) self-check passes, full agency resumes, `self_check_ok=true`. (b)+(c) self-check **fails**, full agency does **not** resume (degraded mode + alert logged), `self_check_ok=false` — Johnny does not wake into a corrupted identity. The check never mutates the Core anchor; it only compares.
+The Core anchor is immutable (it can't drift), so it is the **trusted reference**; the check trips when the refreshed self-model diverges from it or fails to parse.
+**Steps:** (a) Run a sleep with a self-model consistent with the anchor. (b) Tamper: blank/corrupt the latest self-model doc, then attempt wake. (c) Inject a self-model whose name/prime-directive contradicts the anchor reference.
+**Expected:** (a) self-check passes, full agency resumes, `self_check_ok=true`. (b)+(c) self-check **fails**, full agency does **not** resume (degraded mode + alert logged), `self_check_ok=false` — Johnny does not wake into a corrupted identity. The check only **reads** the Core anchor to compare against; it never writes it (FC-1).
 **Status:** ⬜
 
 ### TC-4.11: Sleep/wake + self-model surface on `/ws/state` and the REPL

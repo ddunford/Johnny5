@@ -56,7 +56,8 @@ Working memory is **Redis** (bounded, TTL/decay), not a table.
 - [x] `TASK-1.7` Snapshot/restore of all stores (continuity foundation) → `/fastapi-engineer` [TC-1.7]
 - [ ] `TASK-1.8` Memory repository unit tests + recall-ranking tests (deterministic/seeded embeddings) → `/qa-test-engineer` [TC-1.1, TC-1.2, TC-1.3, TC-1.4]
 - [ ] `TASK-1.9` Restart-persistence integration test (write → restart → recall) → `/qa-test-engineer` [TC-1.7]
-- [ ] `TASK-1.10` ⫘ Security review: memory snapshots gitignored, no PII in logs, parameterised vector queries → `/security-reviewer`
+- [x] `TASK-1.10` ⫘ Security review: memory snapshots gitignored, no PII in logs, parameterised vector queries → `/security-reviewer`
+  - Verdict: **PASS — no Critical/High.** Vector/edge/recall queries parameterised (SQLAlchemy constructs); the only f-string SQL is identifier interpolation from a hardcoded `_TABLES` allowlist in snapshot.py (table names can't be bind-params — allowlist is correct/safe). Snapshots write only to gitignored `memory_snapshot_dir` (none tracked); no PII/secret logging; embedding content goes to the Embedder, never into SQL. (Local-only snapshots are trusted; revisit if snapshots ever become shareable/remote.)
 
 ## Notes
 - No UI and no live-running loop yet; verification is pytest + a REPL/script that writes and recalls. No Playwright.

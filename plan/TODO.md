@@ -6,12 +6,10 @@ Single source of truth for open work, in order. Move items between sections; del
 
 ## In progress
 
-_(none — Phase 2 complete 2026-05-27; Phase 3 is next)_
+### Phase 3 — Drives + Affect  →  `plan/phase-3-drives-affect.md`  ⟵ team `johnny5-phase-3`
+Drive engine (curiosity, boredom, connection, mastery, coherence, energy, continuity), urge→goal arbitration, appraisal/mood. Idle Johnny now *wants* things and acts on them. **Done = the autonomy loop closes — he explores unprompted.**
 
 ## Next
-
-### Phase 3 — Drives + Affect  →  `plan/phase-3-drives-affect.md`
-Drive engine (curiosity, boredom, connection, mastery, coherence, energy, continuity), urge→goal arbitration, appraisal/mood. Idle Johnny now *wants* things and acts on them. **Done = the autonomy loop closes — he explores unprompted.**
 
 ## Left (roadmap — expand to full phase files as we approach)
 

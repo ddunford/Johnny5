@@ -1,0 +1,1 @@
+{"id":"chatcmpl-580","object":"chat.completion","created":1779843272,"model":"gemma4:e4b","system_fingerprint":"fp_ollama","choices":[{"index":0,"message":{"role":"assistant","content":"ALIVE"},"finish_reason":"stop"}],"usage":{"prompt_tokens":22,"completion_tokens":3,"total_tokens":25}}

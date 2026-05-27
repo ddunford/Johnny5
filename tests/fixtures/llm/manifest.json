@@ -1,0 +1,37 @@
+{
+  "_comment": "LITERAL captures of real provider response envelopes. Do NOT hand-edit the body of a captured response; re-capture from the live endpoint if a provider changes. These lock the contract the brain/llm provider adapters must project (TASK-0.13).",
+  "captured_on": "2026-05-27",
+  "captured_by": "qa (Phase 0)",
+  "fixtures": {
+    "groq_llama33_completion.json": {
+      "source": "POST https://api.groq.com/openai/v1/chat/completions",
+      "model": "llama-3.3-70b-versatile",
+      "prompt": "Reply with exactly: ALIVE",
+      "demonstrates": "Groq OpenAI-compatible envelope. Clean choices[0].message.content; usage.{prompt_tokens,completion_tokens,total_tokens}. Extra Groq keys: usage_breakdown, x_groq, service_tier, system_fingerprint."
+    },
+    "ollama_gemma4_completion.json": {
+      "source": "POST http://inference.lan:8000/v1/chat/completions",
+      "model": "gemma4:e4b",
+      "prompt": "Reply with exactly: ALIVE",
+      "demonstrates": "Local workhorse. Clean choices[0].message.content (no reasoning channel). usage.{prompt_tokens,completion_tokens,total_tokens}."
+    },
+    "ollama_qwen35_thinking_completion.json": {
+      "source": "POST http://inference.lan:8000/v1/chat/completions",
+      "model": "qwen3.5-9b-128k:latest",
+      "prompt": "What is 2+2? Give a one-sentence answer.",
+      "demonstrates": "THINKING MODEL. Contrary to the substrate doc's 'empty content' claim, content IS populated and clean ('2 plus 2 equals 4.'); the chain-of-thought is in a SEPARATE message.reasoning field. Adapter must read content as the answer, surface reasoning separately, and defensively fall back to reasoning only if content is empty."
+    },
+    "ollama_qwen35_thinking_completion_terse.json": {
+      "source": "POST http://inference.lan:8000/v1/chat/completions",
+      "model": "qwen3.5-9b-128k:latest",
+      "prompt": "Name one primary colour. Answer with a single word.",
+      "demonstrates": "Second qwen sample (warm). content='Red' (clean) + separate reasoning. Confirms content-populated behaviour is consistent, not a one-off."
+    },
+    "embed_bge_m3.json": {
+      "source": "POST http://inference.lan:8002/embed",
+      "model": "bge-m3",
+      "request_body": "{\"inputs\":\"Johnny 5 is alive.\"}",
+      "demonstrates": "Custom Flask embeddings contract (NOT TEI native). Response {embeddings:[[...1024 floats...]], num_texts, time_ms}. 1024-d."
+    }
+  }
+}

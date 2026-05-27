@@ -36,7 +36,7 @@ async def post_input(body: InputRequest, request: Request, runtime: RuntimeDep) 
 
     if len(body.text) > settings.web_input_max_chars:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=f"text exceeds {settings.web_input_max_chars} characters",
         )
 

@@ -58,9 +58,9 @@ Phase 5a builds that API: the **input endpoint** (the "talk to him" send), the *
 - [x] `TASK-5a.5` ⫘ `GET /api/v1/memory/episodes` (recent + `q` search) + `GET /api/v1/memory/facts` (semantic recall) → `/fastapi-engineer` [TC-5a.5]
 - [x] `TASK-5a.6` ⫘ `GET /api/v1/goals` + `GET /api/v1/sleeps` + `GET /api/v1/self` (identity + metacognition notes) → `/fastapi-engineer` [TC-5a.6]
 - [x] `TASK-5a.7` Wire `v1_router` sub-routers + repos through the runtime; confirm app boots with the full surface → `/fastapi-engineer` [TC-5a.7]
-- [ ] `TASK-5a.8` ⫘ Backend tests: token gate rejects (401) + admits per endpoint; `/input` round-trips to the InputQueue; each read endpoint's shape over seeded rows → `/qa-test-engineer` [TC-5a.1..5a.6]
-- [ ] `TASK-5a.9` ⫘ Capture wire fixtures: write each endpoint's real JSON response to `tests/fixtures/wire/*.json` (incl. an EMPTY-state capture per endpoint — no rows / never-slept / null mood) for Phase 5b contract pinning → `/qa-test-engineer` [TC-5a.8]
-- [ ] `TASK-5a.10` ⫘ Security review: the token gate actually protects every `/api/v1` route (no unauthenticated leak); `/input` can't inject control commands or oversized payloads; no secrets in any envelope or the audit log; health redaction holds → `/security-reviewer` [TC-5a.1]
+- [x] `TASK-5a.8` ⫘ Backend tests: token gate rejects (401) + admits per endpoint; `/input` round-trips to the InputQueue; each read endpoint's shape over seeded rows → `/qa-test-engineer` [TC-5a.1..5a.6]
+- [x] `TASK-5a.9` ⫘ Capture wire fixtures: write each endpoint's real JSON response to `tests/fixtures/wire/*.json` (incl. an EMPTY-state capture per endpoint — no rows / never-slept / null mood) for Phase 5b contract pinning → `/qa-test-engineer` [TC-5a.8]
+- [x] `TASK-5a.10` ⫘ Security review: the token gate actually protects every `/api/v1` route (no unauthenticated leak); `/input` can't inject control commands or oversized payloads; no secrets in any envelope or the audit log; health redaction holds → `/security-reviewer` [TC-5a.1]
 
 ## Notes
 - **Empty-state fixtures are mandatory** (TASK-5a.9): a fresh Johnny has no episodes, never slept, null mood. The SPA's first-load is exactly this state — capturing it now is what lets 5b's contract tests + fresh-load smoke catch `undefined`/null projection bugs before they ship (Step 7c).

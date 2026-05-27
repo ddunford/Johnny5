@@ -1,0 +1,43 @@
+{
+  "events": [
+    {
+      "id": 4,
+      "ts": "2026-05-20T09:08:00+00:00",
+      "module": "narrator",
+      "type": "thought",
+      "payload": {
+        "text": "Reflecting on my recall left me a little more settled."
+      }
+    },
+    {
+      "id": 3,
+      "ts": "2026-05-20T09:07:00+00:00",
+      "module": "drives",
+      "type": "drive.update",
+      "payload": {
+        "drive": "connection",
+        "value": 0.62
+      }
+    },
+    {
+      "id": 2,
+      "ts": "2026-05-20T09:06:00+00:00",
+      "module": "deliberation",
+      "type": "action.dispatched",
+      "payload": {
+        "action": "reflect",
+        "goal_id": 1,
+        "summary": "Reflected on my recall ranking."
+      }
+    },
+    {
+      "id": 1,
+      "ts": "2026-05-20T09:05:00+00:00",
+      "module": "narrator",
+      "type": "thought",
+      "payload": {
+        "text": "I wonder what Dan is working on right now."
+      }
+    }
+  ]
+}

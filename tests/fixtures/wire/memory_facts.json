@@ -1,0 +1,24 @@
+{
+  "facts": [
+    {
+      "id": 2,
+      "subject": "pgvector",
+      "predicate": "enables",
+      "object": "semantic recall",
+      "confidence": 0.75,
+      "source_episode_ids": [],
+      "score": null
+    },
+    {
+      "id": 1,
+      "subject": "Johnny",
+      "predicate": "trusts",
+      "object": "Dan",
+      "confidence": 0.9,
+      "source_episode_ids": [
+        1
+      ],
+      "score": null
+    }
+  ]
+}

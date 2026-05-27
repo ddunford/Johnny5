@@ -1,0 +1,17 @@
+{
+  "sleeps": [
+    {
+      "id": 1,
+      "started_at": "2026-05-20T08:00:00+00:00",
+      "ended_at": "2026-05-20T08:05:00+00:00",
+      "trigger": "energy",
+      "facts_written": 4,
+      "episodes_decayed": 2,
+      "facts_merged": 1,
+      "self_model_version": 2,
+      "snapshot_path": null,
+      "self_check_ok": true,
+      "notes": {}
+    }
+  ]
+}

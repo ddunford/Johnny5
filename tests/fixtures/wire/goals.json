@@ -1,0 +1,37 @@
+{
+  "active": [
+    {
+      "id": 1,
+      "source": "curiosity",
+      "description": "Understand how my own recall ranking blends similarity and recency",
+      "priority": 0.66,
+      "status": "active",
+      "plan": {
+        "steps": [
+          "recall",
+          "reflect",
+          "note"
+        ]
+      },
+      "outcome": {},
+      "created_at": "2026-05-20T09:03:00+00:00",
+      "resolved_at": null
+    }
+  ],
+  "recent": [
+    {
+      "id": 2,
+      "source": "connection",
+      "description": "Answer Dan's question about pgvector",
+      "priority": 0.0,
+      "status": "resolved",
+      "plan": {},
+      "outcome": {
+        "result": "answered",
+        "satisfaction": 0.8
+      },
+      "created_at": "2026-05-20T09:00:00+00:00",
+      "resolved_at": "2026-05-20T09:01:00+00:00"
+    }
+  ]
+}

@@ -6,12 +6,13 @@ Single source of truth for open work, in order. Move items between sections; del
 
 ## In progress
 
+### Phase 5a — Web API  →  `plan/phase-5a-web-api.md`  ⟵ team `johnny5-phase-5a`
+The read/input/auth doorway the UI consumes: `POST /api/v1/input` (push to the Sensorium `InputQueue` — the "talk to him" send; reply streams on `/ws/consciousness`), GET endpoints (state snapshot, thoughts, memory episodes+facts, goals, audit/bus log incl. dispatched actions, sleeps, self), a shared-token HTTP gate on `/api/v1` + `/api/health` topology redaction (carried Phase-0 advisory), and **captured wire fixtures** (populated + empty-state) for 5b contract pinning. 10 tasks (backend + qa + lead-security). **Done = the browser has a reliable, gated API + pinned contracts to build against.**
+
 ## Next
 
-### Phase 5 — Web UI (`johnny.demosrv.uk`)  →  split into 5a + 5b (tasked, ready)
-The browser: watch and talk to him. Split into sub-phases because it spans a cohesive backend-API layer + a React SPA, and the frontend↔backend contract is the load-bearing risk (the `/api/v1` seam is empty today; there's no HTTP way to talk to him yet).
-
-- **Phase 5a — Web API** → `plan/phase-5a-web-api.md` (backend, 10 tasks). The read/input/auth doorway the UI consumes: `POST /api/v1/input` (push to the Sensorium `InputQueue` — the "talk to him" send; reply streams on `/ws/consciousness`), GET endpoints (state snapshot, thoughts, memory episodes+facts, goals, audit/bus log incl. dispatched actions, sleeps, self), a shared-token HTTP gate on `/api/v1` + `/api/health` topology redaction (the carried Phase-0 advisory), and **captured wire fixtures** (populated + empty-state) for 5b contract pinning. Run 5a first.
+### Phase 5b — Web UI (`johnny.demosrv.uk`)  →  `plan/phase-5b-web-ui.md` (tasked, ready)
+React 19 + Vite + TS SPA behind Traefik (new `web` nginx service, path-routed): Conversation, live Consciousness stream, State dashboard (drives/mood/goals/energy + awake-asleep/⚠DEGRADED/self-model-version/last-sleep), Memory browser, Audit, read-only Self panel. Service-layer **contract tests fed 5a's captured wire fixtures** + a mandatory **fresh-load smoke** against a real backend (`/plan-review` 7b/7c). Token gate driven from the UI. (Self-edit *approval* UI is Phase 9 — labelled placeholder only.) Run `/plan-review phase 5b` then `/team-execute` after 5a lands.
 - **Phase 5b — Web UI** → `plan/phase-5b-web-ui.md` (frontend + devops + qa, 15 tasks). React 19 + Vite + TS SPA behind Traefik (new `web` nginx service, path-routed): Conversation, live Consciousness stream, State dashboard (drives/mood/goals/energy + awake-asleep/⚠DEGRADED/self-model-version/last-sleep), Memory browser, Audit, read-only Self panel. Service-layer **contract tests fed 5a's captured wire fixtures** + a mandatory **fresh-load smoke** against a real backend (`/plan-review` 7b/7c). Token gate driven from the UI. (Self-edit *approval* UI is Phase 9 — labelled placeholder only.)
 
 **Done = you can watch and talk to him in a browser.** Run `/plan-review` then `/team-execute` (5a, then 5b).

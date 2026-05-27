@@ -51,7 +51,7 @@ Phase 5a builds that API: the **input endpoint** (the "talk to him" send), the *
 
 ## Tasks
 
-- [ ] `TASK-5a.1` HTTP shared-token gate dependency (reuse `ws_token`, constant-time, header-based, blank=dev-open) applied to `/api/v1`; redact `/api/health` for unauthenticated callers (Phase-0 advisory) → `/fastapi-engineer` [TC-5a.1]
+- [x] `TASK-5a.1` HTTP shared-token gate dependency (reuse `ws_token`, constant-time, header-based, blank=dev-open) applied to `/api/v1`; redact `/api/health` for unauthenticated callers (Phase-0 advisory) → `/fastapi-engineer` [TC-5a.1]
 - [ ] `TASK-5a.2` `POST /api/v1/input` → `InputQueue.push(source="web")` + `{accepted, queue_depth}`; rejects blank/oversized input (422/413) AND **caps queue depth** — reject with `429` when `InputQueue.depth()` exceeds a bound (settings, default ~100) so a runaway client/loop can't grow the Redis list unboundedly → `/fastapi-engineer` [TC-5a.2]
 - [ ] `TASK-5a.3` Extract the shared state-payload **serializer** from `brain/cycle.py` (the dict-builder that turns drives/mood/goals/sleep into the frame shape — WS uses it from the tick `ctx`); `GET /api/v1/state` builds the snapshot from **current state read off the repos** (`drives.current()` / `affect.current()` / `goals.active()` / `sleep.latest_sleep()`) and serializes it with that SAME function — so REST and WS shapes can't drift (don't fake a tick ctx, don't duplicate the serializer) → `/fastapi-engineer` [TC-5a.3]
 - [ ] `TASK-5a.4` ⫘ `GET /api/v1/thoughts` + `GET /api/v1/audit` (over `workspace.recent_events`; audit includes `action.dispatched`) → `/fastapi-engineer` [TC-5a.4]

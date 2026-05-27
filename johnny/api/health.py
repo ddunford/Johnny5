@@ -17,11 +17,12 @@ from datetime import UTC, datetime
 from time import perf_counter
 
 import httpx
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
 from foundation import db, redis_client
 from foundation.config import Settings, get_settings
+from johnny.api.v1.auth import token_is_valid
 
 health_router = APIRouter(prefix="/api", tags=["health"])
 
@@ -128,9 +129,19 @@ async def check_health(settings: Settings) -> HealthResponse:
     )
 
 
-@health_router.get("/health", response_model=HealthResponse)
-async def health(response: Response) -> HealthResponse:
-    """Readiness across all dependencies. 503 only when a critical store is down."""
-    report = await check_health(get_settings())
+@health_router.get("/health")
+async def health(request: Request, response: Response) -> dict[str, object]:
+    """Readiness across all dependencies. 503 only when a critical store is down.
+
+    Redacted for **unauthenticated** callers (the Phase-0 advisory): they get a
+    bare ``{"status": ...}`` + the 200/503 code (enough for a container/uptime
+    probe) with **no per-dependency topology**. An **authenticated** caller (a
+    valid shared token, the same gate as ``/api/v1``) gets the full per-dependency
+    detail. Reads the live settings off ``app.state`` so a test app's token applies.
+    """
+    settings: Settings = getattr(request.app.state, "settings", None) or get_settings()
+    report = await check_health(settings)
     response.status_code = 503 if report.status == "unhealthy" else 200
-    return report
+    if token_is_valid(request, settings):
+        return report.model_dump()
+    return {"status": report.status}

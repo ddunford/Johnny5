@@ -312,6 +312,26 @@ class Settings(BaseSettings):
     # client/loop can't grow the Redis list unboundedly faster than the cycle drains it.
     web_input_max_queue_depth: int = Field(default=100)
 
+    # ── web_fetch tool (the SSRF-hardened reader, Phase 6b — SPEC §9.1) ──
+    # Johnny picks URLs autonomously, so web_fetch is the phase's #1 SSRF surface.
+    # These are *Core-style caps*, not caller args: a tool's args can't loosen them
+    # (raising the size cap or following more redirects must not be Johnny's choice).
+    # The IP deny-list + scheme allowlist live in code (brain/effectors/safe_http.py).
+    web_fetch_user_agent: str = Field(
+        default="Johnny5/1.0 (+autonomous reader; https://johnny.demosrv.uk)"
+    )
+    # Max redirect hops to follow. Each hop is re-resolved + re-validated against the
+    # IP deny-list BEFORE connecting, so a public URL can't 302 its way to an internal host.
+    web_fetch_max_redirects: int = Field(default=5)
+    # Per-request wall-clock budget (connect + read). A slow/hostile server is aborted.
+    web_fetch_timeout_seconds: float = Field(default=10.0)
+    # Hard cap on raw bytes downloaded — the stream is aborted past this (a huge/inifinite
+    # body can't exhaust memory). Reads are streamed + counted, never buffered blind.
+    web_fetch_max_bytes: int = Field(default=2_000_000)
+    # Cap on the *extracted* text returned to the workspace. Attention is a bottleneck
+    # (SPEC §5): a fetched page is distilled, never dumped whole into Johnny's context.
+    web_fetch_max_text_chars: int = Field(default=20_000)
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def sqlalchemy_url(self) -> str:

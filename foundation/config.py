@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     postgres_password: str = Field(default="")
     redis_url: str = Field(default="redis://redis:6379/0")
 
+    # ── Interface auth (interim gate; Phase 5 replaces with full session auth) ──
+    # Shared token required to stream /ws/consciousness and to drive the cycle
+    # control channel. Empty = open (dev convenience); set a real value in .env so
+    # Johnny's inner monologue isn't world-readable on the public router.
+    ws_token: str = Field(default="")
+
     # ── Local inference (Ollama on inference.lan) ──
     local_llm_base_url: str = Field(default="http://inference.lan:8000")
     local_fast_model: str = Field(default="gemma4:e4b")
@@ -114,6 +120,14 @@ class Settings(BaseSettings):
     attention_weight_salience: float = Field(default=1.0)
     attention_weight_novelty: float = Field(default=0.6)
     attention_repeat_penalty: float = Field(default=0.5)
+
+    # ── Inner Narrator ──
+    # Token ceiling for one thought. Must cover gemma4's reasoning preamble (it
+    # behaves like a thinking model under the reflective persona + json_object)
+    # PLUS the JSON thought — a low ceiling lets the preamble eat the budget,
+    # truncating before any content (the lessons.md trap; qa verified ~800 is the
+    # floor, 1024 leaves headroom). Tunable (FC-3).
+    narrator_max_tokens: int = Field(default=1024)
 
     # ── Memory wiring into the cycle (recall + learn stages) ──
     # How many episodes / facts recall pulls into the workspace each tick.

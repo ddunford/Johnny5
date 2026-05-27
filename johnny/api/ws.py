@@ -15,11 +15,13 @@ web UI (Phase 5), tracked in plan/TODO.md.
 
 from __future__ import annotations
 
+import secrets
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from brain.workspace import Workspace, WorkspaceEvent
+from foundation.config import Settings
 from foundation.observability import get_logger
 
 _log = get_logger("johnny.api.ws")
@@ -29,6 +31,22 @@ ws_router = APIRouter()
 THOUGHT_EVENT = "thought"
 # How many recent thoughts to replay to a newly-connected client.
 _BACKFILL = 10
+# WS close code 1008 = policy violation (used for an unauthorised handshake).
+_POLICY_VIOLATION = 1008
+
+
+def _ws_authorised(websocket: WebSocket, settings: Settings) -> bool:
+    """Interim shared-token gate (Phase-5 session-auth replaces this).
+
+    A blank ``ws_token`` disables the gate (local dev). Otherwise the client must
+    present the token as ``?token=`` or the ``X-WS-Token`` header. Constant-time
+    compared; the token is never logged.
+    """
+    expected = settings.ws_token
+    if not expected:
+        return True
+    provided = websocket.query_params.get("token") or websocket.headers.get("x-ws-token") or ""
+    return secrets.compare_digest(provided, expected)
 
 
 def _thought_message(event: WorkspaceEvent) -> dict[str, Any]:
@@ -45,6 +63,11 @@ def _thought_message(event: WorkspaceEvent) -> dict[str, Any]:
 async def consciousness(websocket: WebSocket) -> None:
     """Stream Johnny's stream of consciousness (recent backfill, then live)."""
     await websocket.accept()
+    if not _ws_authorised(websocket, websocket.app.state.settings):
+        # Reject before streaming a single thought — his inner life isn't public.
+        _log.warning("ws.consciousness.unauthorised")
+        await websocket.close(code=_POLICY_VIOLATION)
+        return
     runtime = getattr(websocket.app.state, "runtime", None)
     if runtime is None:
         # The Mind isn't running (shouldn't happen under the lifespan) — close.

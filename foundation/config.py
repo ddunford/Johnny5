@@ -102,9 +102,21 @@ class Settings(BaseSettings):
     drives_config_path: str = Field(default="config/drives.toml")
 
     # ── Cognitive cycle (the heartbeat) ──
-    # Base seconds between ticks. Fixed this phase; Phase 3 Affect modulates the
-    # rate (excited → faster, tired → slower), which is why it's config not code.
+    # Base seconds between ticks. Phase 3 Affect modulates the rate around this
+    # (excited → faster, tired → slower), which is why it's config not code.
     cycle_base_interval_seconds: float = Field(default=4.0)
+    # Hard bounds on the modulated interval. The floor is a safety bound (a 3.12
+    # concern): no amount of arousal may shorten the tick below this, so high
+    # arousal can't spin the loop and blow the Groq budget. The ceiling caps how
+    # slow a tired/calm Johnny ticks (he idles, he doesn't freeze).
+    cycle_min_interval_seconds: float = Field(default=1.5)
+    cycle_max_interval_seconds: float = Field(default=12.0)
+    # Weight of arousal on rate: interval ∝ 1/(1 + speedup·arousal). Higher = a
+    # given arousal speeds the heartbeat more (still clamped to the floor).
+    cycle_arousal_speedup: float = Field(default=1.0)
+    # Extra slowdown as the Energy drive (tiredness) exceeds its threshold —
+    # interval ∝ (1 + slowdown·energy_excess): the heartbeat drags toward sleep.
+    cycle_tired_slowdown: float = Field(default=1.5)
     # How many salient items Attention may place on the workspace per tick — the
     # bottleneck bound (LIDA/GWT: a wider workspace degrades, not improves).
     workspace_capacity: int = Field(default=7)
@@ -127,6 +139,12 @@ class Settings(BaseSettings):
     attention_weight_salience: float = Field(default=1.0)
     attention_weight_novelty: float = Field(default=0.6)
     attention_repeat_penalty: float = Field(default=0.5)
+    # Phase-3 affect bias (the FC-7 _score slot): high arousal *narrows* focus —
+    # it amplifies already-salient items and dampens marginal ones (SPEC §6.2).
+    attention_weight_arousal: float = Field(default=0.7)
+    # A drive over threshold boosts the percept kinds relevant to satisfying it
+    # (Connection→input, Curiosity→recalled memory/facts), scaled by its urgency.
+    attention_weight_drive: float = Field(default=0.5)
 
     # ── Inner Narrator ──
     # Token ceiling for one thought. Must cover gemma4's reasoning preamble (it
@@ -157,6 +175,10 @@ class Settings(BaseSettings):
     # Recalled memory is salient enough to surface but capped *below* a fresh
     # message — recall informs the present, it doesn't crowd it out.
     memory_recall_salience_ceiling: float = Field(default=0.7)
+    # Affect bias on recall (SPEC §6.2: emotionally-charged episodes recalled more
+    # easily): arousal scales up the salience weight in the recall blend, so when
+    # Johnny is activated his charged memories surface more readily.
+    memory_recall_arousal_salience_gain: float = Field(default=1.0)
     # An interaction is always written to episodic memory; an idle stream-of-
     # consciousness tick is written only every N ticks (so memory grows from
     # what's notable, not from every 4s of "nothing happened").

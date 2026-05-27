@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from sqlalchemy import BigInteger, DateTime, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
+from brain.affect.appraisal import Mood
 from brain.config_store import ConfigStore, get_config_store
 from brain.llm.base import LLMUnavailableError, Message
 from brain.llm.router import LLMRouter
@@ -122,6 +123,13 @@ class Narrator:
         self._max_tokens = (
             max_tokens if max_tokens is not None else get_settings().narrator_max_tokens
         )
+        # Current mood, set by the cycle each tick (optional — narration works
+        # without it). Colours the tone and stamps ``thought.mood_id``.
+        self._mood: Mood | None = None
+
+    def set_mood(self, mood: Mood | None) -> None:
+        """Set the mood colouring the next thought (called by the cycle, FC-7)."""
+        self._mood = mood
 
     async def narrate(self, *, contents: Sequence[WorkspaceItem]) -> str | None:
         """Produce one first-person thought, or ``None`` when every provider is tired."""
@@ -153,19 +161,27 @@ class Narrator:
         return ()
 
     def _render(self, contents: Sequence[WorkspaceItem]) -> str:
-        """Format the salient set as the Narrator's context for this tick."""
+        """Format the salient set as the Narrator's context for this tick.
+
+        When a mood is set, its tone descriptor is prepended so the thought is
+        coloured by how Johnny feels (``SPEC §6.2`` tone) — not just what he sees.
+        """
         if not contents:
             lines = ["(your mind is briefly empty)"]
         else:
             lines = [f"- [{item.kind}] {item.content}" for item in contents]
         focus = "\n".join(lines)
+        mood_line = f"You feel {self._mood.descriptor()}.\n\n" if self._mood is not None else ""
         return (
+            f"{mood_line}"
             "Here is what is in your awareness right now, most salient first:\n"
             f"{focus}\n\n"
             'Respond with ONLY JSON: {"thought": "<one first-person thought>"}.'
         )
 
     async def _persist(self, text: str) -> Thought:
+        # Stamp the mood this thought was born in (TC-3.4: thought.mood_id populated).
+        mood_id = self._mood.id if self._mood is not None else None
         async with session_scope() as session:
-            row = await ThoughtRepository(session).add(ThoughtRow(text=text))
+            row = await ThoughtRepository(session).add(ThoughtRow(text=text, mood_id=mood_id))
             return Thought(id=row.id, ts=row.ts, text=row.text, mood_id=row.mood_id)

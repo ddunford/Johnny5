@@ -33,8 +33,12 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Protocol, runtime_checkable
 
+from brain.affect.appraisal import Mood
+from brain.agents.attention import AttentionBias
+from brain.drives.engine import EVENT_INTERACTION, SLEEP_DRIVE, DriveEvent, DriveReading, Urge
 from brain.memory.working import WorkingMemory, WorkingMemoryItem
 from brain.workspace import Workspace, WorkspaceEvent, WorkspaceItem
 from foundation.observability import get_logger
@@ -44,6 +48,16 @@ _log = get_logger("brain.cycle")
 # Minimum backoff after an unexpected tick error, so a persistent failure can't
 # turn the loop into a hot spin even if the configured interval is tiny.
 _ERROR_BACKOFF_SECONDS = 1.0
+
+# The percept kind a fresh interaction arrives as (a high-salience input).
+_INPUT_KIND = "input"
+# Drive → the percept kinds attending to it helps satisfy (the FC-7 bias slot):
+# an unmet Connection pulls toward fresh input; unmet Curiosity toward recall.
+_DRIVE_KIND_RELEVANCE: dict[str, tuple[str, ...]] = {
+    "connection": ("input",),
+    "curiosity": ("memory", "fact"),
+    "boredom": ("input", "memory"),
+}
 
 
 # ── stage collaborators (each optional; the cycle no-ops when one is absent) ───
@@ -93,6 +107,31 @@ class LearningStage(Protocol):
     async def learn(self, *, contents: Sequence[WorkspaceItem], thought: str | None) -> None: ...
 
 
+@runtime_checkable
+class DriveStage(Protocol):
+    """Drives: advance the homeostatic pressures and emit urges (``SPEC §6.1``)."""
+
+    async def step(
+        self, events: Sequence[DriveEvent] = (), *, now: datetime | None = None
+    ) -> Sequence[DriveReading]: ...
+
+    def urges(self, readings: Sequence[DriveReading]) -> Sequence[Urge]: ...
+
+
+@runtime_checkable
+class AffectStage(Protocol):
+    """Affect: appraise the tick into the running mood (``SPEC §6.2``)."""
+
+    async def appraise_tick(
+        self,
+        *,
+        contents: Sequence[WorkspaceItem],
+        drives: Sequence[DriveReading],
+        events: Sequence[DriveEvent] = (),
+        now: datetime | None = None,
+    ) -> Mood: ...
+
+
 # ── per-tick state + report ────────────────────────────────────────────────────
 
 
@@ -104,6 +143,10 @@ class CycleContext:
     percepts: list[WorkspaceItem] = field(default_factory=list)
     contents: list[WorkspaceItem] = field(default_factory=list)
     thought: str | None = None
+    drives: list[DriveReading] = field(default_factory=list)
+    mood: Mood | None = None
+    urges: list[Urge] = field(default_factory=list)
+    events: list[DriveEvent] = field(default_factory=list)
     stage_errors: dict[str, str] = field(default_factory=dict)
 
 
@@ -187,8 +230,15 @@ class CognitiveCycle:
         recall: RecallStage | None = None,
         narration: NarrationStage | None = None,
         learning: LearningStage | None = None,
+        drives: DriveStage | None = None,
+        affect: AffectStage | None = None,
         working_memory: WorkingMemory | None = None,
         interval_seconds: float = 4.0,
+        min_interval_seconds: float = 1.5,
+        max_interval_seconds: float = 12.0,
+        arousal_speedup: float = 1.0,
+        tired_slowdown: float = 1.5,
+        attention_drive_weight: float = 0.5,
         workspace_capacity: int = 7,
         sleep_fn: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
@@ -198,13 +248,26 @@ class CognitiveCycle:
         self._recall = recall
         self._narration = narration
         self._learning = learning
+        self._drives = drives
+        self._affect = affect
         self._working_memory = working_memory
         self._interval = interval_seconds
+        # Bounds on the affect-modulated interval (the floor is the 3.12 spin guard).
+        self._min_interval = min_interval_seconds
+        self._max_interval = max_interval_seconds
+        self._arousal_speedup = arousal_speedup
+        self._tired_slowdown = tired_slowdown
+        self._attention_drive_weight = attention_drive_weight
         self._capacity = workspace_capacity
         self._sleep = sleep_fn
         self._gate = CycleGate()
         self._running = False
         self._tick = 0
+        # The next sleep, set by APPRAISE from mood/energy; the base until affect runs.
+        self._next_interval = interval_seconds
+        # Outcome events Deliberation/Act queue this tick, consumed by the *next*
+        # APPRAISE so a goal's result feeds drives+affect (FC-5 dispatch → feedback).
+        self._pending_events: list[DriveEvent] = []
 
     # ── lifecycle ────────────────────────────────────────────────────────────
 
@@ -234,6 +297,21 @@ class CognitiveCycle:
         self._running = False
         self._gate.resume()
 
+    def enqueue_drive_event(self, event: DriveEvent) -> None:
+        """Queue an outcome event (success/learning/…) for the next APPRAISE.
+
+        Deliberation/Act report a goal's result here (FC-5 dispatch → feedback);
+        the *next* tick's drive step consumes it, so an achieved goal eases the
+        drive that spawned it and colours mood. Applied next tick (not this one) to
+        keep each drive step a single elapsed-time advance.
+        """
+        self._pending_events.append(event)
+
+    @property
+    def next_interval(self) -> float:
+        """The interval the heartbeat will sleep after the last tick (for the REPL)."""
+        return self._next_interval
+
     async def run(self) -> None:
         """The heartbeat: tick, sleep, repeat — until ``stop`` is called.
 
@@ -250,12 +328,14 @@ class CognitiveCycle:
                     break
                 try:
                     await self.tick()
-                    await self._sleep(self._interval)
+                    # APPRAISE set the next interval from mood/energy (bounded); the
+                    # heartbeat speeds up when aroused and drags when tired.
+                    await self._sleep(self._next_interval)
                 except asyncio.CancelledError:
                     raise
                 except Exception:
                     _log.exception("cycle.tick.unexpected_error", tick=self._tick)
-                    await self._sleep(max(self._interval, _ERROR_BACKOFF_SECONDS))
+                    await self._sleep(max(self._next_interval, _ERROR_BACKOFF_SECONDS))
         finally:
             self._running = False
             _log.info("cycle.run.stop", ticks=self._tick)
@@ -400,7 +480,126 @@ class CognitiveCycle:
     # ── stages: explicit stubs (filled in place by Phase 3 / Phase 6) ──────────
 
     async def _appraise(self, ctx: CycleContext) -> None:
-        """APPRAISE — Affect + Drives update from percepts/decay. Stub until Phase 3."""
+        """APPRAISE — Drives + Affect update from percepts, decay, and outcomes.
+
+        Fills the Phase-2 stub in place (FC-7). Drives advance first (so Affect
+        sees the fresh pressures and any satisfaction), then Affect appraises the
+        situation into the running mood. Both are broadcast (FC-8 — ``/ws/state``
+        consumes them) and fed forward as this tick's attention/recall/narration
+        bias and the next heartbeat interval. Each is optional: with neither wired,
+        APPRAISE is a no-op and the loop ticks at its base rate, as before.
+        """
+        ctx.events = self._collect_events(ctx)
+
+        if self._drives is not None:
+            ctx.drives = list(await self._drives.step(ctx.events))
+            ctx.urges = list(self._drives.urges(ctx.drives))
+            await self._broadcast_drives(ctx)
+
+        if self._affect is not None:
+            ctx.mood = await self._affect.appraise_tick(
+                contents=ctx.percepts, drives=ctx.drives, events=ctx.events
+            )
+            await self._emit(ctx, "affect", "mood", self._mood_payload(ctx.mood), stage="appraise")
+
+        self._apply_affective_context(ctx)
+        self._next_interval = self._modulate_interval(ctx.mood, ctx.drives)
+
+    def _collect_events(self, ctx: CycleContext) -> list[DriveEvent]:
+        """This tick's drive events: queued outcomes + an interaction per fresh input."""
+        events = list(self._pending_events)
+        self._pending_events.clear()
+        inputs = sum(1 for p in ctx.percepts if p.kind == _INPUT_KIND)
+        events.extend(DriveEvent(kind=EVENT_INTERACTION) for _ in range(inputs))
+        return events
+
+    async def _broadcast_drives(self, ctx: CycleContext) -> None:
+        """Broadcast the drive levels + any urges (FC-8: the state surface reads this)."""
+        await self._emit(
+            ctx,
+            "drives",
+            "drive.state",
+            {
+                "drives": {d.drive: round(d.value, 4) for d in ctx.drives},
+                "over_threshold": [u.drive for u in ctx.urges],
+            },
+            stage="appraise",
+        )
+        for urge in ctx.urges:
+            event_type = "drive.sleep_signal" if urge.is_sleep_signal else "drive.urge"
+            await self._emit(
+                ctx,
+                "drives",
+                event_type,
+                {
+                    "drive": urge.drive,
+                    "urgency": round(urge.urgency, 4),
+                    "value": round(urge.value, 4),
+                },
+                stage="appraise",
+            )
+
+    @staticmethod
+    def _mood_payload(mood: Mood) -> dict[str, object]:
+        return {
+            "valence": round(mood.valence, 4),
+            "arousal": round(mood.arousal, 4),
+            "emotions": {e: round(v, 4) for e, v in mood.emotions.items()},
+            "descriptor": mood.descriptor(),
+            "mood_id": mood.id,
+        }
+
+    def _apply_affective_context(self, ctx: CycleContext) -> None:
+        """Hand the tick's mood/drives to Attention, Recall, and the Narrator.
+
+        Optional capability (FC-7): each collaborator gets the context only if it
+        exposes the setter, so a bare stage or a test double is untouched. This is
+        what makes affect *steer* cognition rather than decorate it.
+        """
+        bias = self._build_attention_bias(ctx.mood, ctx.drives)
+        self._set_if_supported(self._attention, "set_bias", bias)
+        self._set_if_supported(self._recall, "set_mood", ctx.mood)
+        self._set_if_supported(self._narration, "set_mood", ctx.mood)
+
+    @staticmethod
+    def _set_if_supported(collaborator: object, method: str, value: object) -> None:
+        setter = getattr(collaborator, method, None)
+        if callable(setter):
+            setter(value)
+
+    def _build_attention_bias(
+        self, mood: Mood | None, drives: Sequence[DriveReading]
+    ) -> AttentionBias:
+        """Build Attention's bias from arousal (sharpen) + unmet-drive kind pulls."""
+        arousal = mood.arousal if mood is not None else AttentionBias().arousal
+        kind_boosts: dict[str, float] = {}
+        for reading in drives:
+            if not reading.over_threshold or reading.drive == SLEEP_DRIVE:
+                continue
+            pull = self._attention_drive_weight * reading.urgency
+            for kind in _DRIVE_KIND_RELEVANCE.get(reading.drive, ()):
+                kind_boosts[kind] = kind_boosts.get(kind, 0.0) + pull
+        return AttentionBias(arousal=arousal, kind_boosts=kind_boosts)
+
+    def _modulate_interval(self, mood: Mood | None, drives: Sequence[DriveReading]) -> float:
+        """Map mood/energy to the next tick interval, hard-bounded (the 3.12 guard).
+
+        Arousal shortens the interval (excited → faster); the Energy drive's
+        overshoot lengthens it (tired → slower, toward sleep). The result is
+        clamped to ``[min, max]`` so no arousal can spin the loop and no tiredness
+        can freeze it.
+        """
+        arousal = mood.arousal if mood is not None else AttentionBias().arousal
+        energy_excess = 0.0
+        for reading in drives:
+            if reading.drive == SLEEP_DRIVE and reading.over_threshold:
+                energy_excess = reading.urgency
+        interval = (
+            self._interval
+            * (1.0 + self._tired_slowdown * energy_excess)
+            / (1.0 + self._arousal_speedup * arousal)
+        )
+        return min(self._max_interval, max(self._min_interval, interval))
 
     async def _deliberate(self, ctx: CycleContext) -> None:
         """DELIBERATE — Planner picks an action for the active goal. Stub until Phase 6."""

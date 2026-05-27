@@ -155,7 +155,14 @@ class EpisodicMemory:
             )
             return _row_to_episode(row)
 
-    async def recall(self, query: str, k: int = 5, *, now: datetime | None = None) -> list[Episode]:
+    async def recall(
+        self,
+        query: str,
+        k: int = 5,
+        *,
+        now: datetime | None = None,
+        weights: RecallWeights | None = None,
+    ) -> list[Episode]:
         """Recall the ``k`` most relevant episodes for ``query`` by the hybrid blend.
 
         Pulls a similarity-ordered candidate pool from the ANN index, then
@@ -163,10 +170,13 @@ class EpisodicMemory:
         and returns the top ``k`` with their blended ``score`` populated. Anything
         past rank ``k`` is excluded; ``k <= 0`` returns an empty list. ``now``
         overrides the injected clock for this call (tests freeze recency here).
+        ``weights`` overrides the default blend for this call — Phase-3 Affect
+        passes arousal-boosted salience weights so charged memories surface more.
         """
         if k <= 0:
             return []
         reference = now if now is not None else self._now_fn()
+        blend = weights if weights is not None else self._weights
         query_vector = await self._embedder.embed_one(query)
         pool = max(self._candidate_pool, k)
         async with session_scope() as session:
@@ -176,9 +186,9 @@ class EpisodicMemory:
         for row, distance in candidates:
             score = blended_score(
                 similarity=similarity_from_distance(distance),
-                recency=recency_score(row.ts, reference, self._weights.recency_halflife_seconds),
+                recency=recency_score(row.ts, reference, blend.recency_halflife_seconds),
                 salience=clamp01(row.salience),
-                weights=self._weights,
+                weights=blend,
             )
             scored.append(_row_to_episode(row, score=score))
 

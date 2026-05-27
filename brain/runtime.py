@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 
+from brain.affect.agent import Affect
 from brain.agents import AgentRegistry
 from brain.agents.attention import Attention
 from brain.agents.memory_stages import EpisodicLearner, MemoryRecaller
@@ -24,6 +25,7 @@ from brain.agents.narrator import Narrator
 from brain.agents.sensorium import Sensorium
 from brain.cycle import CognitiveCycle
 from brain.cycle_control import CycleControlListener
+from brain.drives.engine import DriveEngine
 from brain.llm.router import LLMRouter, build_router
 from brain.memory.working import WorkingMemory
 from brain.workspace import Workspace
@@ -43,19 +45,27 @@ class CognitiveRuntime:
         registry: AgentRegistry,
         router: LLMRouter,
         cycle: CognitiveCycle,
+        drives: DriveEngine,
     ) -> None:
         self.workspace = workspace
         self.registry = registry
         self.router = router
         self.cycle = cycle
+        self.drives = drives
         self._control = CycleControlListener(cycle)
         self._bus_task: asyncio.Task[None] | None = None
         self._cycle_task: asyncio.Task[None] | None = None
         self._control_task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
-        """Start the bus listener, heartbeat, and REPL control listener."""
+        """Start the bus listener, heartbeat, and REPL control listener.
+
+        Drives are bootstrapped first — rows ensured + parameters re-synced from
+        ``drives.toml`` (FC-3) — without resetting the persisted pressure, so the
+        homeostatic state carries across the restart (FC-6).
+        """
         self.registry.attach(self.workspace)
+        await self.drives.bootstrap()
         self._bus_task = asyncio.create_task(self.workspace.run(), name="workspace-bus")
         self._cycle_task = asyncio.create_task(self.cycle.run(), name="cognitive-cycle")
         self._control_task = asyncio.create_task(self._control.run(), name="cycle-control")
@@ -103,6 +113,13 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
     narrator = Narrator(router)
     registry.register(narrator)
 
+    # Affect appraises the tick into a persisted mood (registered inner agent,
+    # FC-2/FC-3); the Drive engine is the homeostatic core (a stage collaborator,
+    # no prompt of its own). Both fill the Phase-2 APPRAISE stub (FC-7).
+    affect = Affect(router)
+    registry.register(affect)
+    drives = DriveEngine()
+
     # Memory recall/learn are stage collaborators, not bus agents (no prompt to
     # edit) — they bridge the cycle to the Phase-1 memory spine.
     recaller = MemoryRecaller()
@@ -115,9 +132,18 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
         recall=recaller,
         narration=narrator,
         learning=learner,
+        drives=drives,
+        affect=affect,
         working_memory=working_memory,
         interval_seconds=settings.cycle_base_interval_seconds,
+        min_interval_seconds=settings.cycle_min_interval_seconds,
+        max_interval_seconds=settings.cycle_max_interval_seconds,
+        arousal_speedup=settings.cycle_arousal_speedup,
+        tired_slowdown=settings.cycle_tired_slowdown,
+        attention_drive_weight=settings.attention_weight_drive,
         workspace_capacity=settings.workspace_capacity,
     )
 
-    return CognitiveRuntime(workspace=workspace, registry=registry, router=router, cycle=cycle)
+    return CognitiveRuntime(
+        workspace=workspace, registry=registry, router=router, cycle=cycle, drives=drives
+    )

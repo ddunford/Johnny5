@@ -26,11 +26,30 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Sequence
 
+from pydantic import BaseModel, Field
+
 from brain.memory.base import clamp01
 from brain.workspace import WorkspaceEvent, WorkspaceItem
 from foundation.config import get_settings
 
 ATTENTION_AGENT_NAME = "attention"
+
+# Arousal at the calm baseline — sharpening is measured relative to this, so a
+# resting Johnny attends evenly and only an *activated* one narrows his focus.
+_AROUSAL_NEUTRAL = 0.3
+
+
+class AttentionBias(BaseModel):
+    """The affective context the cycle hands Attention each tick (FC-7 _score slot).
+
+    ``arousal`` ∈ [0, 1] narrows focus (amplifies salient items, dampens marginal
+    ones). ``kind_boosts`` adds drive-relevant pull per item kind — e.g. an unmet
+    Connection drive boosts ``input``, unmet Curiosity boosts recalled ``memory``/
+    ``fact`` — so what Johnny *needs* shapes what he attends to.
+    """
+
+    arousal: float = _AROUSAL_NEUTRAL
+    kind_boosts: dict[str, float] = Field(default_factory=dict)
 
 
 class Attention:
@@ -48,6 +67,7 @@ class Attention:
         weight_salience: float | None = None,
         weight_novelty: float | None = None,
         repeat_penalty: float | None = None,
+        weight_arousal: float | None = None,
         novelty_horizon: int | None = None,
     ) -> None:
         settings = get_settings()
@@ -61,9 +81,16 @@ class Attention:
         self._repeat_penalty = (
             repeat_penalty if repeat_penalty is not None else settings.attention_repeat_penalty
         )
+        self._w_arousal = (
+            weight_arousal if weight_arousal is not None else settings.attention_weight_arousal
+        )
         # Remember a few ticks' worth of surfaced content to detect repetition.
         horizon = novelty_horizon if novelty_horizon is not None else max(self._capacity * 4, 12)
         self._recent: deque[str] = deque(maxlen=horizon)
+        # The current affective context; the cycle replaces it each tick via
+        # ``set_bias``. Neutral by default so Attention works unbiased (Phase-2
+        # behaviour and the test doubles are unaffected).
+        self._bias = AttentionBias()
 
     async def select(
         self,
@@ -85,6 +112,16 @@ class Attention:
         self._remember([item.content for item in selected])
         return selected
 
+    def set_bias(self, bias: AttentionBias) -> None:
+        """Set the affective context for the next selection (called by the cycle).
+
+        Optional capability: the cycle invokes this only when an Affect/Drives
+        engine is wired, so a bare Attention (or a test double) just scores
+        unbiased. This is the FC-7 _score slot finally filled, without changing
+        the ``select`` contract.
+        """
+        self._bias = bias
+
     async def handle(self, event: WorkspaceEvent) -> Sequence[WorkspaceEvent]:
         """Pipeline-driven agent — reacts to no bus events."""
         return ()
@@ -92,8 +129,18 @@ class Attention:
     # ── scoring ────────────────────────────────────────────────────────────────
 
     def _score(self, item: WorkspaceItem) -> float:
-        """Blend intrinsic salience with a novelty bonus (repetition penalised)."""
-        return self._w_salience * item.salience + self._w_novelty * self._novelty(item.content)
+        """Blend salience + novelty, then apply the affective bias (FC-7 slot).
+
+        A drive-relevant kind gets an additive pull; arousal then *sharpens* the
+        result — amplifying items above mid-salience and damping those below, so an
+        activated Johnny narrows his focus rather than spreading it (``SPEC §6.2``).
+        """
+        base = self._w_salience * item.salience + self._w_novelty * self._novelty(item.content)
+        base += self._bias.kind_boosts.get(item.kind, 0.0)
+        sharpen = 1.0 + self._w_arousal * (self._bias.arousal - _AROUSAL_NEUTRAL) * (
+            item.salience - 0.5
+        )
+        return max(0.0, base * sharpen)
 
     def _novelty(self, content: str) -> float:
         """1.0 for unseen content; decays as it recurs in the recent window."""

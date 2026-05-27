@@ -13,7 +13,7 @@
 ### TC-2.2: Input becomes a percept and shifts attention
 **Steps:** In the REPL, inject "I just adopted a dog named Pixel."
 **Expected:** A `percept` row is created; on the next tick Attention promotes it into the workspace; the narration references it. Dump shows it in the workspace contents.
-**Status:** ⬜ Mechanism covered in parts — a high-salience input winning Attention (`test_attention.py`) and an input driving recall→narration (`test_narration_grounding.py`); the end-to-end REPL-injection path (percept row → REPL dump) is exercised manually via the REPL / backend Sensorium tests, not in the cognition suite.
+**Status:** ✅ (parts + live, accepted by lead) — the mechanism is unit-covered (high-salience input wins Attention in `test_attention.py`; input drives recall→narration in `test_narration_grounding.py`) and the full inject→percept→attention→narration path was verified live by backend (injected message won attention at salience 1.00 and the next thought referenced it). No single end-to-end cognition test; component + live coverage judged sufficient for this phase.
 
 ### TC-2.3: Attention is a bottleneck
 **Steps:** Inject many low-salience percepts plus one clearly salient one.

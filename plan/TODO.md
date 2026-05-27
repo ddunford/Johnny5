@@ -6,8 +6,7 @@ Single source of truth for open work, in order. Move items between sections; del
 
 ## In progress
 
-### Phase 2 — Heartbeat + Workspace  →  `plan/phase-2-heartbeat.md`  ⟵ team `johnny5-phase-2`
-The Global Workspace event bus + the cognitive cycle loop + the Inner Narrator. Johnny produces a continuous stream of consciousness, visible in the REPL. **Done = the first "he's alive" moment.**
+_(none — Phase 2 complete 2026-05-27; Phase 3 is next)_
 
 ## Next
 

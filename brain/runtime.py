@@ -54,12 +54,14 @@ class CognitiveRuntime:
         router: LLMRouter,
         cycle: CognitiveCycle,
         drives: DriveEngine,
+        self_model: SelfModel,
     ) -> None:
         self.workspace = workspace
         self.registry = registry
         self.router = router
         self.cycle = cycle
         self.drives = drives
+        self.self_model = self_model
         self._control = CycleControlListener(cycle)
         self._bus_task: asyncio.Task[None] | None = None
         self._cycle_task: asyncio.Task[None] | None = None
@@ -70,10 +72,14 @@ class CognitiveRuntime:
 
         Drives are bootstrapped first — rows ensured + parameters re-synced from
         ``drives.toml`` (FC-3) — without resetting the persisted pressure, so the
-        homeostatic state carries across the restart (FC-6).
+        homeostatic state carries across the restart (FC-6). The self-model is
+        bootstrapped with the SAME idempotent helper a test fixture uses, so a fresh
+        DB (or one whose ``identity`` was wiped) self-heals to the anchor-grounded v1
+        baseline rather than waiting for the first sleep.
         """
         self.registry.attach(self.workspace)
         await self.drives.bootstrap()
+        await self.self_model.bootstrap()
         self._bus_task = asyncio.create_task(self.workspace.run(), name="workspace-bus")
         self._cycle_task = asyncio.create_task(self.cycle.run(), name="cognitive-cycle")
         self._control_task = asyncio.create_task(self._control.run(), name="cycle-control")
@@ -143,11 +149,14 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
     # Sleep — the offline growth phase the run loop enters between ticks (FC-7). It
     # shares the one DriveEngine so restore-energy/persistence land on live state,
     # and the cloud-first consolidation/self_model/metacognition roles go through the
-    # same router (FC-4). Bounded: the Consolidator caps LLM calls per sleep.
+    # same router (FC-4). Bounded: the Consolidator caps LLM calls per sleep. The one
+    # SelfModel instance is shared with the runtime so startup bootstraps the same
+    # one sleep refreshes (prod + test seed identically via SelfModel.bootstrap()).
+    self_model = SelfModel(router)
     sleep_cycle = SleepCycle(
         consolidator=Consolidator(SemanticMemory(), router=router),
         decay=MemoryDecay(),
-        self_model=SelfModel(router),
+        self_model=self_model,
         metacognition=Metacognition(router),
         snapshot=MemorySnapshot(working=working_memory),
         drives=drives,
@@ -175,5 +184,10 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
     )
 
     return CognitiveRuntime(
-        workspace=workspace, registry=registry, router=router, cycle=cycle, drives=drives
+        workspace=workspace,
+        registry=registry,
+        router=router,
+        cycle=cycle,
+        drives=drives,
+        self_model=self_model,
     )

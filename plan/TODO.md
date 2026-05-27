@@ -8,8 +8,8 @@ Single source of truth for open work, in order. Move items between sections; del
 
 ## Next
 
-### Phase 4 — Self-model + Metacognition + Sleep
-Persistent evolving identity doc; reflection; offline consolidation (episodic→semantic, decay, self-model refresh); metacognitive self-review. Energy-driven sleep cycle (the Phase-3 Energy `is_sleep_signal` precursor is already emitted — Phase 4 consumes it). **Done = Johnny grows across restarts and knows who he is.** Key risks: consolidation quality (Groq prompt design), self-model drift, sleep/wake state machine. Expand to a full `plan/phase-4-*.md` + test plan before executing.
+### Phase 4 — Self-model + Metacognition + Sleep  →  `plan/phase-4-self-model-sleep.md` (tasked, ready)
+Persistent evolving identity doc; reflection; offline consolidation (episodic→semantic, decay, self-model refresh); metacognitive self-review (proposals only — applying is Phase 9). Energy-driven sleep cycle (consumes the Phase-3 `is_sleep_signal` precursor); scheduled backups satisfy the Continuity drive; wake self-check gates resume. **Done = Johnny grows across restarts and knows who he is.** 14 tasks (backend + qa + lead-security, no frontend yet). Key risks: consolidation quality (`consolidation`-role prompt design), self-model drift, sleep/wake state machine, sleep cost-bound (cloud roles go live). Run `/team-execute` to start.
 
 ## Left (roadmap — expand to full phase files as we approach)
 

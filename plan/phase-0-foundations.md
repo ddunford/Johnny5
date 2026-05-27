@@ -63,7 +63,8 @@ The substrate Johnny runs on. No cognition yet — this phase makes "the lights 
 - [x] `TASK-0.13` Contract tests for Groq + Qwen adapters (response-envelope fixtures → projection) → `/qa-test-engineer` [TC-0.3]
 - [x] `TASK-0.14` Router resilience tests: circuit opens, fails over to local, recovers (frozen-clock) → `/qa-test-engineer` [TC-0.4]
 - [ ] `TASK-0.15` Live verification against real `inference.lan` + Groq: real completion both providers, real 1024-d embedding, forced-failover smoke → `/qa-test-engineer` [TC-0.3, TC-0.4, TC-0.5]
-- [ ] `TASK-0.16` ⫘ OWASP/secrets review: `.env` handling, no creds in logs/Sentry, hook active, health endpoint not leaking internals → `/security-reviewer` [TC-0.6]
+- [x] `TASK-0.16` ⫘ OWASP/secrets review: `.env` handling, no creds in logs/Sentry, hook active, health endpoint not leaking internals → `/security-reviewer` [TC-0.6]
+  - Verdict: **PASS — no Critical/High.** .env untracked, no key/secret in any tracked file, hook active, non-root image, terse leak-safe health detail, no secret logging. LOW/info advisory carried forward (see TODO.md): `/api/health` exposes per-dep up/down+latency — auth-gate/trim when the public UI lands (Phase 5).
 
 ## Notes
 - This phase ships no cognition and no UI — verification is via `ctl.sh`, the health endpoint, and pytest. No Playwright yet (no pages).

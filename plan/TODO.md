@@ -46,6 +46,7 @@ Finalise the sensor/actuator abstraction; mock hardware adapters; documented con
 ---
 
 ## Cross-cutting / not phase-bound
+- **[Phase 0 security advisory — LOW]** `/api/health` exposes per-dependency up/down + latency to any unauthenticated caller. Fine now (LAN-internal, single-user). When the public web UI / auth gate lands (**Phase 5**), auth-gate `/api/health` or return a bare 200/503 to unauthenticated callers (avoid infra-topology disclosure).
 - Keep `.env.example` in sync with every new env var introduced.
 - Every LLM-role adapter gets a contract test when introduced (don't batch later).
 - Resource/budget governors (`core/governors.py`) must exist before tool-belt (Phase 6) and self-mod (Phase 9) ship.

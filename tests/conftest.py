@@ -16,11 +16,14 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
+import pytest_asyncio
+from redis.asyncio import Redis, from_url
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 # Make ``helpers`` importable regardless of pytest's import mode.
 _TESTS_DIR = Path(__file__).parent
@@ -28,6 +31,11 @@ if str(_TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(_TESTS_DIR))
 
 from helpers.clock import FrozenClock  # noqa: E402
+from helpers.db import (  # noqa: E402
+    migrate_test_db_to_head,
+    require_testing_env,
+    restart_global_engine,
+)
 
 FIXTURES_DIR = _TESTS_DIR / "fixtures"
 
@@ -88,3 +96,40 @@ def load_fixture() -> Callable[[str], Any]:
         return json.loads((FIXTURES_DIR / relpath).read_text())
 
     return _load
+
+
+# ── shared DB / Redis fixtures (cross-loop safe; see helpers/db.py) ──────────────
+# Available to every DB-backed suite (memory spine, cognition heartbeat). They
+# only do work when a test requests them, so the pure/contract suites are
+# unaffected. All require ``./ctl.sh test`` (in-network Postgres/Redis).
+
+
+@pytest.fixture(scope="session")
+def _migrated_test_db() -> None:
+    """Bring the test database to ``head`` exactly once per session."""
+    migrate_test_db_to_head()
+
+
+@pytest_asyncio.fixture
+async def redis_client() -> AsyncIterator[Redis]:
+    """A fresh, loop-local Redis client over a flushed test DB.
+
+    A per-test client avoids reusing a connection bound to another event loop.
+    ``./ctl.sh test`` points ``REDIS_URL`` at db 1; a guard refuses to flush
+    outside the testing env, and ``flushdb`` only affects the connected (test) DB.
+    """
+    settings = require_testing_env()
+    client: Redis = from_url(settings.redis_url, decode_responses=True)
+    await client.flushdb()
+    try:
+        yield client
+    finally:
+        await client.flushdb()
+        await client.aclose()
+
+
+@pytest.fixture
+def simulate_restart() -> Callable[[], Awaitable[AsyncEngine]]:
+    """An awaitable that tears down and rebuilds the process-global engine —
+    the in-process stand-in for ``./ctl.sh down && up`` (restart-persistence)."""
+    return restart_global_engine

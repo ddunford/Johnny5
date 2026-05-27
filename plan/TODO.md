@@ -6,6 +6,9 @@ Single source of truth for open work, in order. Move items between sections; del
 
 ## In progress
 
+### Phase 6a — Safe-action substrate (executing) → `plan/phase-6a-safe-action-substrate.md`
+Conscience + vetted dispatch + append-only audit + the 3 carried advisories (budget gate, `/no_think`, no-secrets-on-bus). Backend teammate (fastapi) + QA teammate + lead-security.
+
 ## Next
 
 ### Phase 6 — Tool belt + Conscience  →  split into 6a + 6b (tasked, ready)

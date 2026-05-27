@@ -96,7 +96,9 @@ class OpenAICompatibleProvider:
             payload["stop"] = stop
 
         try:
-            resp = await self._client.post("chat/completions", json=payload)
+            resp = await self._client.post(
+                "chat/completions", json=payload, timeout=self._request_timeout(model)
+            )
         except httpx.TimeoutException as exc:
             raise ProviderTimeoutError(
                 f"{self.name} timed out calling chat/completions", provider=self.name
@@ -112,6 +114,15 @@ class OpenAICompatibleProvider:
             )
 
         return self._parse(resp.json(), requested_model=model)
+
+    def _request_timeout(self, model: str) -> Any:
+        """Per-request timeout for ``model``; base uses the client default.
+
+        Hook for providers that serve models with very different latency profiles
+        (e.g. Ollama's fast gemma4 vs the slow qwen thinking model) — they override
+        this to widen the timeout for the heavy model without slowing the others.
+        """
+        return httpx.USE_CLIENT_DEFAULT
 
     def _parse(self, data: dict[str, Any], *, requested_model: str) -> Completion:
         """Project a response envelope into a ``Completion`` (delegates to the

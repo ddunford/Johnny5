@@ -48,7 +48,15 @@ class Settings(BaseSettings):
     local_llm_base_url: str = Field(default="http://inference.lan:8000")
     local_fast_model: str = Field(default="gemma4:e4b")
     local_reasoning_model: str = Field(default="qwen3.5-9b-128k:latest")
+    # Per-tick fast-model (gemma4) timeout — kept tight so a hung local call fails
+    # over fast and doesn't stall the heartbeat.
     local_llm_timeout: float = Field(default=120.0)
+    # Reasoning-model (qwen3.5) timeout — applied ONLY when a call targets the
+    # reasoning model. qwen is a thinking model used for heavy/OFFLINE roles
+    # (deliberation fallback + the sleep roles' qwen fallback), where a long
+    # generation (~150s with its reasoning preamble) is fine; the per-tick fast model
+    # keeps the tight ``local_llm_timeout`` so hot-path failover stays snappy.
+    local_reasoning_timeout: float = Field(default=240.0)
 
     # ── Embeddings (custom Flask server, /embed contract) ──
     embed_base_url: str = Field(default="http://inference.lan:8002")
@@ -100,10 +108,12 @@ class Settings(BaseSettings):
     # cap fold into their nearest existing cluster rather than spawning a new call.
     consolidation_max_clusters: int = Field(default=8)
     # Token ceiling for one cluster summary. consolidation is cloud-first (Groq, no
-    # reasoning preamble), but its local fallback is qwen (which DOES emit one) — so
-    # this clears the preamble + the JSON triple (the lessons.md trap), matching the
-    # narrator/affect proven headroom. Tunable (FC-3).
-    consolidation_max_tokens: int = Field(default=1024)
+    # reasoning preamble), but its local fallback is qwen3.5, which spends ~1500
+    # tokens on a reasoning preamble BEFORE the JSON — a 1024 ceiling let the preamble
+    # eat the whole budget (finish_reason='length', no JSON → silent degrade on every
+    # fallback sleep; the lessons.md trap, caught by qa's @live leg). 4096 clears the
+    # preamble + the triple with headroom and is a no-op for the Groq primary. (FC-3)
+    consolidation_max_tokens: int = Field(default=4096)
     # Default confidence for a consolidated fact when the model doesn't supply one.
     consolidation_default_confidence: float = Field(default=0.6)
 
@@ -131,17 +141,19 @@ class Settings(BaseSettings):
     self_model_recent_episodes: int = Field(default=15)
     self_model_recent_facts: int = Field(default=10)
     # Token ceiling for one self-model refresh. self_model is cloud-first (Groq), but
-    # the local fallback is qwen (reasoning preamble) and the output is a sizeable
-    # JSON object (doc + values + concerns + relationships), so this needs real
-    # headroom over the preamble (the lessons.md trap). Tunable (FC-3).
-    self_model_max_tokens: int = Field(default=1536)
+    # the local fallback is qwen3.5 (~1500-token reasoning preamble) and the output is
+    # a sizeable JSON object (doc + values + concerns + relationships). 1536 truncated
+    # on the qwen fallback (finish_reason='length'; qa's @live leg); 4096 clears the
+    # preamble + the object. No-op for the Groq primary path (just a ceiling). (FC-3)
+    self_model_max_tokens: int = Field(default=4096)
 
     # ── Sleep: metacognition review (self-improvement proposals, SPEC §5 #12) ──
     # How many recent goals / degraded-tick thoughts the review inspects.
     metacognition_recent_goals: int = Field(default=20)
     # Token ceiling for one metacognition review (first-person review + a few
-    # proposals as JSON). Same reasoning-preamble headroom rationale. Tunable (FC-3).
-    metacognition_max_tokens: int = Field(default=1536)
+    # proposals as JSON). Same qwen reasoning-preamble headroom rationale as the other
+    # two sleep roles — 1536 truncated on the qwen fallback (qa's @live leg). (FC-3)
+    metacognition_max_tokens: int = Field(default=4096)
 
     # ── Sleep cycle (the offline phase the run loop enters between ticks) ──
     # Optional fallback cadence: force a sleep every N ticks even if Energy hasn't

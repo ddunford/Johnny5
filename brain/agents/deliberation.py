@@ -90,13 +90,28 @@ _AMBIENT_KIND = "ambient"
 
 
 class Action(BaseModel):
-    """An internal action chosen for a goal (no external side effects this phase)."""
+    """An action chosen for a goal.
+
+    An *internal* action (reflect/recall/consolidate/formulate) is executed by
+    Deliberation itself. A *tool* action sets ``tool`` + ``tool_args`` and is
+    instead routed through the vetted + audited effector dispatch (FC-5) — the
+    Conscience vets it before any tool runs. ``is_tool_action`` distinguishes them.
+    """
 
     kind: str
     goal_id: int | None
     goal_source: str
     description: str
     query: str = ""
+    # When set, this is a tool action: the named tool + the args to run it with.
+    # The dispatch resolves the tool from the registry and vets it (FC-5/FC-9).
+    tool: str | None = None
+    tool_args: dict[str, object] = Field(default_factory=dict)
+
+    @property
+    def is_tool_action(self) -> bool:
+        """True when this action runs a tool through the effector dispatch."""
+        return self.tool is not None
 
 
 class ActionOutcome(BaseModel):
@@ -136,6 +151,7 @@ class Deliberation:
         max_tokens: int | None = None,
         recall_k: int | None = None,
         min_interval_seconds: float | None = None,
+        tool_actions: dict[str, tuple[str, dict[str, object]]] | None = None,
         now_fn: Callable[[], datetime] = utcnow,
     ) -> None:
         settings = get_settings()
@@ -143,6 +159,12 @@ class Deliberation:
         self._store = store or GoalStore(now_fn=now_fn)
         self._arbiter = arbiter or GoalArbiter(store=self._store, now_fn=now_fn)
         self._episodic = episodic or EpisodicMemory()
+        # Goal source → (tool name, args) the goal should act through instead of an
+        # internal action. Empty by default: Phase 6a ships only the inert ``noop``
+        # tool and does NOT auto-pick it (echoing on the heartbeat is pointless). The
+        # mechanism is here + wired so Phase 6b can map real curiosity/connection
+        # goals to web/news/etc. tools without touching the cycle (FC-2/FC-7).
+        self._tool_actions = dict(tool_actions or {})
         self.prompt = self._load_prompt(config_store)
         self._max_tokens = (
             max_tokens if max_tokens is not None else settings.deliberation_max_tokens
@@ -186,7 +208,22 @@ class Deliberation:
         return DeliberationResult(goal=goal, action=self.plan(goal, contents))
 
     def plan(self, goal: Goal, contents: Sequence[WorkspaceItem]) -> Action:
-        """Map a goal to an internal action (pure, rule-based — no I/O)."""
+        """Map a goal to an action (pure, rule-based — no I/O).
+
+        A goal source mapped in ``tool_actions`` becomes a *tool* action (run +
+        vetted + audited through the dispatch); otherwise it's an internal action.
+        """
+        proposal = self._tool_actions.get(goal.source)
+        if proposal is not None:
+            tool_name, tool_args = proposal
+            return Action(
+                kind=tool_name,
+                goal_id=goal.id,
+                goal_source=goal.source,
+                description=goal.description,
+                tool=tool_name,
+                tool_args=dict(tool_args),
+            )
         kind = _DRIVE_ACTION.get(goal.source, ACTION_REFLECT)
         return Action(
             kind=kind,
@@ -195,6 +232,31 @@ class Deliberation:
             description=goal.description,
             query=self._query_from(goal, contents),
         )
+
+    async def settle_tool_action(
+        self, goal: Goal, *, summary: str, success: bool
+    ) -> list[DriveEvent]:
+        """Settle a goal whose action ran through the effector dispatch (not ``act``).
+
+        The tool executed in the dispatch (FC-5), not here — so this only advances
+        the action-cadence clock, resolves the goal so it won't re-trigger, and
+        returns the drive-satisfaction events for the cycle to enqueue. A vetoed or
+        failed action eases nothing (``success=False`` → no events), so a blocked
+        action doesn't falsely soothe the drive that motivated it.
+        """
+        self._last_acted = self._now_fn()
+        events = self._satisfaction_events(goal) if success else []
+        if goal.id is not None:
+            await self._store.resolve(
+                goal.id,
+                outcome={
+                    "action": "tool",
+                    "summary": summary,
+                    "events": [e.kind for e in events],
+                    "success": success,
+                },
+            )
+        return events
 
     async def act(
         self, action: Action, goal: Goal, contents: Sequence[WorkspaceItem]

@@ -38,8 +38,10 @@ from typing import Protocol, runtime_checkable
 
 from brain.affect.appraisal import Mood
 from brain.agents.attention import AttentionBias
+from brain.agents.conscience import ProposedAction
 from brain.agents.deliberation import Action, ActionOutcome, DeliberationResult
 from brain.drives.engine import EVENT_INTERACTION, SLEEP_DRIVE, DriveEvent, DriveReading, Urge
+from brain.effectors.dispatch import EffectorDispatch, VettedAction
 from brain.goals.store import Goal, goals_to_payload
 from brain.memory.working import WorkingMemory, WorkingMemoryItem
 from brain.sleep import CheckResult, SleepCycle, SleepLog, SleepReport
@@ -173,6 +175,8 @@ class CycleContext:
     events: list[DriveEvent] = field(default_factory=list)
     goal: Goal | None = None
     action: Action | None = None
+    # A tool action resolved + vetted at CHECK, awaiting execution at ACT (FC-7).
+    vetted: VettedAction | None = None
     stage_errors: dict[str, str] = field(default_factory=dict)
 
 
@@ -259,6 +263,7 @@ class CognitiveCycle:
         drives: DriveStage | None = None,
         affect: AffectStage | None = None,
         deliberation: DeliberationStage | None = None,
+        dispatch: EffectorDispatch | None = None,
         sleep_cycle: SleepCycle | None = None,
         working_memory: WorkingMemory | None = None,
         interval_seconds: float = 4.0,
@@ -279,6 +284,7 @@ class CognitiveCycle:
         self._drives = drives
         self._affect = affect
         self._deliberation = deliberation
+        self._dispatch = dispatch
         self._sleep_cycle = sleep_cycle
         self._working_memory = working_memory
         self._interval = interval_seconds
@@ -815,27 +821,49 @@ class CognitiveCycle:
             )
 
     async def _check(self, ctx: CycleContext) -> None:
-        """CHECK — Conscience vets the proposed action. Stub until Phase 6.
+        """CHECK — the Conscience vets a proposed tool action before it can run (FC-7/FC-9).
 
-        Phase-3 actions are internal (reflect/recall/consolidate/formulate); the
-        Conscience that vets *external* action lands with the tool belt (Phase 6).
+        Phase 6a's effector substrate: a *tool* action (one Deliberation proposed
+        via the registry) is resolved + vetted here against Johnny's values; the
+        verdict rides forward to ACT. Internal actions (reflect/recall/…) keep their
+        Phase-3 path and are not vetted here. CHECK no-ops when there's no tool
+        action, no dispatch wired, or agency is suspended — exactly as before.
         """
+        if not self._full_agency or self._dispatch is None:
+            return
+        action = ctx.action
+        if action is None or not action.is_tool_action:
+            return
+        assert action.tool is not None  # is_tool_action guarantees this
+        proposed = ProposedAction(
+            tool=action.tool,
+            args=dict(action.tool_args),
+            goal_id=action.goal_id,
+            goal_description=action.description,
+        )
+        ctx.vetted = await self._dispatch.vet(proposed, contents=ctx.contents)
 
     async def _act(self, ctx: CycleContext) -> None:
-        """ACT — execute the planned internal action through the dispatch seam (FC-5).
+        """ACT — execute the planned action; the single dispatch point audits it (FC-5).
 
-        Bounded to one action per tick. Deliberation runs the action and resolves
-        the goal; the cycle routes it through the single audited dispatch point and
-        enqueues the satisfaction event so the *next* APPRAISE eases the drive — the
-        feedback that closes the autonomy loop. Phase 6's external effectors slot in
-        here behind the same seam.
+        Bounded to one action per tick. A **tool** action runs through the vetted +
+        audited effector dispatch (the Conscience already ran at CHECK); an
+        **internal** action is executed by Deliberation and broadcast on the bus, as
+        in Phase 3. Either way the satisfaction events feed the *next* APPRAISE, so
+        acting eases the drive — the feedback that closes the autonomy loop.
 
-        Also gated by the full-agency flag (SPEC §9.3) — defence in depth: even if an
-        action were somehow planned, degraded mode dispatches nothing.
+        Gated by the full-agency flag (SPEC §9.3) — defence in depth: in degraded
+        mode nothing is dispatched.
         """
         if not self._full_agency:
             return
-        if self._deliberation is None or ctx.action is None or ctx.goal is None:
+        if ctx.action is None or ctx.goal is None:
+            return
+        if ctx.action.is_tool_action:
+            await self._dispatch_tool_action(ctx)
+            return
+        # Internal action — Phase-3 path (Deliberation executes + resolves the goal).
+        if self._deliberation is None:
             return
         outcome = await self._deliberation.act(ctx.action, ctx.goal, ctx.contents)
         await self._dispatch_action(
@@ -850,12 +878,32 @@ class CognitiveCycle:
         for event in outcome.drive_events:
             self.enqueue_drive_event(event)
 
-    async def _dispatch_action(self, action: dict[str, object]) -> None:
-        """The single action dispatch + audit point (FC-5).
+    async def _dispatch_tool_action(self, ctx: CycleContext) -> None:
+        """Run a vetted tool action through the effector dispatch (FC-5), then settle.
 
-        Every Effector action — internal or external — will pass through here so
-        the Conscience check and the Core audit log wrap them uniformly. Phase 6
-        gives it real effectors; today it only records the intent on the bus.
+        ``commit`` runs the tool only if the CHECK verdict allowed it, writes the
+        append-only ``action_log`` row, and emits the outcome on the bus. The goal is
+        then resolved and drive-satisfaction events enqueued — but only on a real
+        run (a veto eases nothing).
+        """
+        if self._dispatch is None or ctx.vetted is None or ctx.goal is None:
+            return
+        outcome = await self._dispatch.commit(ctx.vetted)
+        success = outcome.ran and (outcome.result.success if outcome.result is not None else False)
+        # Goal resolution lives in Deliberation (it owns the GoalStore); call it only
+        # when supported, so a bare DeliberationStage double isn't required to have it.
+        settle = getattr(self._deliberation, "settle_tool_action", None)
+        if callable(settle):
+            for event in await settle(ctx.goal, summary=outcome.summary, success=success):
+                self.enqueue_drive_event(event)
+
+    async def _dispatch_action(self, action: dict[str, object]) -> None:
+        """Broadcast an internal action's outcome on the bus (FC-5 seam, internal path).
+
+        Tool/effector actions go through the ``EffectorDispatch`` (vet → run → audit
+        → emit); this is the lighter seam for *internal* cognition (reflect/recall/…),
+        which has no tool to run and so records its intent on the bus for the live
+        stream + ``/audit``.
         """
         await self._workspace.broadcast(
             WorkspaceEvent(module="effectors", type="action.dispatched", payload=action)

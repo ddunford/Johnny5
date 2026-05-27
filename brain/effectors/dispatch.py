@@ -23,12 +23,13 @@ has to import a Mind type. Tests inject a fake sink to assert the audit shape.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Protocol, runtime_checkable
+from dataclasses import dataclass
+from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
 from brain.agents.conscience import Conscience, ProposedAction, Verdict
-from brain.effectors.tools import ToolRegistry, ToolResult, validate_args
+from brain.effectors.tools import Tool, ToolRegistry, ToolResult, validate_args
 from brain.workspace import WorkspaceEvent, WorkspaceItem
 from foundation.observability import get_logger
 
@@ -92,8 +93,31 @@ class DispatchOutcome(BaseModel):
     summary: str = ""
 
 
+@dataclass(frozen=True)
+class VettedAction:
+    """A proposal that has been resolved + validated + vetted — ready to commit.
+
+    Produced ONLY by ``EffectorDispatch.vet`` (which always consults the
+    Conscience), and the only thing ``commit`` will run. This is what lets the
+    cognitive cycle split the work across its named stages — vet at **CHECK**,
+    run at **ACT** (FC-7) — while keeping the FC-5 guarantee: ``commit`` runs the
+    tool only when ``verdict.allowed``, so there is no path to ``tool.run`` that
+    didn't go through a real vet.
+    """
+
+    action: ProposedAction
+    tool: Tool[Any]
+    validated: BaseModel
+    verdict: Verdict
+
+
 class EffectorDispatch:
-    """The one vetted + audited dispatch point (FC-5). Construct once, wire into ACT."""
+    """The one vetted + audited dispatch point (FC-5).
+
+    Drive it in one shot with ``propose`` (vet→run→audit), or across the cycle's
+    two stages with ``vet`` (CHECK) then ``commit`` (ACT). Either way every action
+    is vetted before it can run and audited whether it ran or was blocked.
+    """
 
     def __init__(
         self,
@@ -108,28 +132,35 @@ class EffectorDispatch:
         self._audit = audit
         self._broadcaster = broadcaster
 
-    async def propose(
+    async def vet(
         self, action: ProposedAction, *, contents: Sequence[WorkspaceItem] = ()
-    ) -> DispatchOutcome:
-        """Vet → (allow) run + audit + emit / (veto) audit + emit, never run.
+    ) -> VettedAction:
+        """CHECK: resolve the tool, validate args, and run the Conscience.
 
         Raises ``DispatchError`` if the tool is unknown and ``pydantic.ValidationError``
-        if the args don't match the tool's schema — both *before* any vetting or
-        running, so a malformed proposal fails typed and the tool never sees bad args.
+        if the args don't match the tool's schema — both *before* the vet, so a
+        malformed proposal fails typed and the tool never sees bad args. The
+        returned ``VettedAction`` is the only thing ``commit`` will act on.
         """
         tool = self._registry.get(action.tool)
         if tool is None:
             raise DispatchError(f"no tool named {action.tool!r} is on the belt")
 
         # The tool is the source of truth for its hazard class — stamp it on the
-        # action so the Conscience vets against the real danger, and validate the
-        # args up front (a typed failure, never an untyped crash in the tool body).
+        # action so the Conscience vets against the real danger.
         action = action.model_copy(update={"danger": str(tool.danger)})
         validated = validate_args(tool, action.args)
-
-        # 1. VET — the one gate. tool.run below is the only run path and it sits
-        #    behind verdict.allowed, so nothing reaches a tool unvetted (FC-5).
         verdict = await self._conscience.vet(action, contents=contents)
+        return VettedAction(action=action, tool=tool, validated=validated, verdict=verdict)
+
+    async def commit(self, vetted: VettedAction) -> DispatchOutcome:
+        """ACT: run the tool iff allowed, then audit + emit. Never runs on a veto.
+
+        ``tool.run`` here is the ONLY place a tool executes, and it is behind the
+        ``verdict.allowed`` gate (FC-5). A veto audits + emits the block and never
+        runs anything.
+        """
+        action, tool, verdict = vetted.action, vetted.tool, vetted.verdict
 
         if not verdict.allowed:
             await self._audit.record(
@@ -150,10 +181,10 @@ class EffectorDispatch:
                 summary=f"vetoed: {verdict.reason}".strip(": "),
             )
 
-        # 2. RUN — allowed, so execute the tool.
-        result = await tool.run(validated)
+        # RUN — allowed, so execute the tool (the one and only run path).
+        result = await tool.run(vetted.validated)
 
-        # 3. AUDIT — the durable, append-only record (via the Core writer, FC-1).
+        # AUDIT — the durable, append-only record (via the Core writer, FC-1).
         await self._audit.record(
             tool=action.tool,
             args=dict(action.args),
@@ -164,10 +195,20 @@ class EffectorDispatch:
             success=result.success,
         )
 
-        # 4. EMIT — surface the outcome on the bus (live stream + /audit).
+        # EMIT — surface the outcome on the bus (live stream + /audit).
         await self._emit(ACTION_DISPATCHED, action, verdict, result=result, success=result.success)
         _log.info("effector.dispatched", tool=action.tool, success=result.success)
         return DispatchOutcome(ran=True, verdict=verdict, result=result, summary=result.summary)
+
+    async def propose(
+        self, action: ProposedAction, *, contents: Sequence[WorkspaceItem] = ()
+    ) -> DispatchOutcome:
+        """Atomic vet→run→audit→emit (CHECK + ACT in one call).
+
+        The single-shot path: ``commit(vet(action))``. Used where a caller dispatches
+        an action outside the cycle's staged loop (and by the dispatch tests).
+        """
+        return await self.commit(await self.vet(action, contents=contents))
 
     async def _emit(
         self,

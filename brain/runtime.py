@@ -20,6 +20,7 @@ import contextlib
 from brain.affect.agent import Affect
 from brain.agents import AgentRegistry
 from brain.agents.attention import Attention
+from brain.agents.conscience import Conscience
 from brain.agents.deliberation import Deliberation
 from brain.agents.memory_stages import EpisodicLearner, MemoryRecaller
 from brain.agents.narrator import Narrator
@@ -27,6 +28,8 @@ from brain.agents.sensorium import InputQueue, Sensorium
 from brain.cycle import CognitiveCycle
 from brain.cycle_control import CycleControlListener
 from brain.drives.engine import DriveEngine
+from brain.effectors.dispatch import EffectorDispatch
+from brain.effectors.tools import default_tool_registry
 from brain.goals.store import GoalStore
 from brain.llm.router import LLMRouter, build_router
 from brain.memory.consolidator import Consolidator
@@ -41,6 +44,7 @@ from brain.self_model.agent import SelfModel
 from brain.self_model.store import IdentityStore
 from brain.sleep import SleepCycle, WakeSelfCheck
 from brain.workspace import Workspace
+from core.audit import AuditWriter
 from foundation.config import Settings, get_settings
 from foundation.observability import get_logger
 
@@ -187,6 +191,22 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
     deliberation = Deliberation(router, store=goal_store)
     registry.register(deliberation)
 
+    # The safe-action substrate (Phase 6a). The Conscience is a registered,
+    # prompt-backed inner agent (FC-2/FC-3) that vets a proposed action at CHECK;
+    # the EffectorDispatch is the single FC-5 point that runs an allowed tool from
+    # the belt and writes the append-only action_log via the Core's import-isolated
+    # AuditWriter (FC-1). The belt ships only the inert `noop` tool this phase — no
+    # world-touching tool yet (6b) — and Deliberation isn't mapped to auto-pick it,
+    # so the heartbeat is unperturbed; the substrate is wired + ready for 6b's tools.
+    conscience = Conscience(router)
+    registry.register(conscience)
+    dispatch = EffectorDispatch(
+        registry=default_tool_registry(),
+        conscience=conscience,
+        audit=AuditWriter(),
+        broadcaster=workspace,
+    )
+
     # Memory recall/learn are stage collaborators, not bus agents (no prompt to
     # edit) — they bridge the cycle to the Phase-1 memory spine.
     recaller = MemoryRecaller()
@@ -222,6 +242,7 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
         drives=drives,
         affect=affect,
         deliberation=deliberation,
+        dispatch=dispatch,
         sleep_cycle=sleep_cycle,
         working_memory=working_memory,
         interval_seconds=settings.cycle_base_interval_seconds,

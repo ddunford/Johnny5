@@ -14,13 +14,13 @@ Verified end-to-end on **2026-05-26** by probing + SSH. This supersedes the orig
 | `:8001` replica for load-balance | **Down** (HTTP 000). Single Ollama instance only |
 | TEI native embeddings (`/embed` + `{inputs,truncate}` → `[[...]]`) | Custom Flask server. Working call: `POST /embed {"inputs":"..."}` → `{"embeddings":[[...]]}`. 1024-d (bge-m3). `/v1/embeddings`, `/info` 404; `/health` 200 |
 | Ollama on GPU | Was **CPU-only** — container had lost NVML ("Unknown Error"); fixed by `docker restart ollama`. Then was pinned to **GPU 0 only** (`device_ids:['0']`) — changed to `['0','1']` in `/opt/inference/docker-compose.yml` (backed up) so it uses both cards |
-| `/no_think` makes Qwen return content | `qwen3.5-9b-128k` is a **thinking** model — returns empty `content`; reasoning is in a separate channel. Adapter must handle. **gemma4:e4b returns clean `content`** |
+| `qwen3.5-9b-128k` returns empty `content` (reasoning-only) | **Corrected (live captures 2026-05-27):** it returns a **populated `content`** AND a separate `message.reasoning` field. Earlier empty-`content` reads were an artifact of `max_tokens=10` — the reasoning preamble consumed the budget before any content token. **Adapter: read `content` first, fall back to `reasoning` only if content is empty, and use an adequate `max_tokens`.** `gemma4:e4b` returns clean `content` (primary). |
 
 ## Model routing (current decision)
 | Role | Model | Placement | Notes |
 |---|---|---|---|
 | Fast/frequent: narrator, attention, affect, perception, **vision percepts** | **`gemma4:e4b`** | GPU-resident (100% GPU after the both-GPU fix; ~12 GB spread across both cards) | multimodal + tool-calling + clean content. The local workhorse |
-| Heavier local: deliberation fallback, consolidation, long context | **`qwen3.5-9b-128k`** | on-demand (~38 s cold load; won't stay pinned alongside gemma4 — only ~6.5 GB free) | thinking-model output quirk; 128k ctx (KV cache q8_0) |
+| Heavier local: deliberation fallback, consolidation, long context | **`qwen3.5-9b-128k`** | on-demand (~38 s cold load; won't stay pinned alongside gemma4 — only ~6.5 GB free) | emits `content` + `reasoning` (read content-first, see row above); needs adequate `max_tokens`; 128k ctx (KV cache q8_0) |
 | Heavy reasoning (default): deliberation, metacognition, self-model | **Groq `llama-3.3-70b-versatile`** | cloud | key verified; budget-capped (`GROQ_DAILY_BUDGET_USD`) → "tired" degradation to local |
 | Embeddings (all memory) | **bge-m3** via `:8002 /embed` | — | 1024-d |
 
@@ -41,7 +41,7 @@ Verified end-to-end on **2026-05-26** by probing + SSH. This supersedes the orig
 
 ## Status of verification
 - [x] Ollama on GPU (both cards), `gemma4:e4b` text + **vision** working
-- [x] `qwen3.5-9b-128k` loads on GPU (empty-content quirk noted)
+- [x] `qwen3.5-9b-128k` loads on GPU; returns `content` + `reasoning` (read content-first; mind `max_tokens`)
 - [x] Embeddings `/embed` → 1024-d vector
 - [x] Groq `llama-3.3-70b-versatile` completes (key valid)
 - [x] **TTS (Kokoro `:8880`)** works — synthesized valid 24 kHz WAV (~55 s on CPU; it's a CPU container)

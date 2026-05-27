@@ -76,7 +76,7 @@ This project is ~90% custom build. Closest composition: **`realtime-ai`** (FastA
 - **API base:** `/api/v1/`. WebSocket: `/ws/consciousness`, `/ws/state`.
 - **Auth:** single-token / Traefik basic-auth gate on the web UI. No user system.
 - **Env:** `.env` (see `.env.example`). `.env.testing` with `POSTGRES_DB=johnny5_test`. Never the dev DB for tests.
-- **Inference:** primary local model is `gemma4:e4b` (clean `content`, multimodal). `qwen3.5-9b-128k` is a "thinking" model — its adapter must read the reasoning channel, not assume `content`. LLM access only via `brain/llm/` router. Full verified substrate + quirks in `plan/inference-substrate.md`.
+- **Inference:** primary local model is `gemma4:e4b` (clean `content`, multimodal). `qwen3.5-9b-128k` emits both `content` and a separate `reasoning` field — adapter reads `content`-first, falls back to `reasoning` only if empty, and must pass an adequate `max_tokens` (low limits get eaten by the reasoning preamble). LLM access only via `brain/llm/` router. Full verified substrate + quirks in `plan/inference-substrate.md`.
 - **Git hooks:** `.githooks/pre-commit` credential guard. `git config core.hooksPath .githooks` after clone.
 - **Privacy:** never commit `data/`, `memory/`, `snapshots/`, `config/runtime/`, or any `.env`.
 - **Naming:** no phase numbers or plan metadata in code. Inner agents named for their cognitive role.

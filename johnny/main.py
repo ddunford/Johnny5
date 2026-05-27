@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
+from brain.runtime import build_runtime
 from foundation.config import Settings, get_settings
 from foundation.db import dispose_engine
 from foundation.observability import (
@@ -44,11 +45,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log = get_logger("johnny.lifespan")
     log.info("startup.begin", service=settings.service_name, environment=settings.app_env)
 
-    # The cognitive cycle and other long-lived resources attach to app.state in
-    # later phases. The lifespan seam is fixed here so they slot in.
+    # The Mind runs headless (FC-8): the cognitive runtime owns the heartbeat and
+    # the workspace bus, started here and torn down on shutdown. The HTTP/WS layer
+    # is a consumer of the workspace it exposes, not the source of truth.
+    runtime = build_runtime(settings)
+    app.state.runtime = runtime
+    await runtime.start()
     try:
         yield
     finally:
+        await runtime.stop()
         await dispose_engine()
         await close_redis()
         log.info("shutdown.complete", service=settings.service_name)

@@ -88,6 +88,14 @@ class Settings(BaseSettings):
     circuit_reset_seconds: float = Field(default=60.0)
     llm_schema_retries: int = Field(default=1)
 
+    # ── Cognitive cycle (the heartbeat) ──
+    # Base seconds between ticks. Fixed this phase; Phase 3 Affect modulates the
+    # rate (excited → faster, tired → slower), which is why it's config not code.
+    cycle_base_interval_seconds: float = Field(default=4.0)
+    # How many salient items Attention may place on the workspace per tick — the
+    # bottleneck bound (LIDA/GWT: a wider workspace degrades, not improves).
+    workspace_capacity: int = Field(default=7)
+
     # ── Interfaces ──
     public_domain: str = Field(default="johnny.demosrv.uk")
     web_port: int = Field(default=80)

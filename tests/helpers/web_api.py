@@ -197,12 +197,19 @@ def build_api_app(
     return app
 
 
-async def broadcast_state_frame(runtime: SimpleNamespace) -> WorkspaceEvent:
+async def broadcast_state_frame(
+    runtime: SimpleNamespace, *, ts: datetime | None = None
+) -> WorkspaceEvent:
     """Persist a ``state`` bus event whose payload == ``GET /api/v1/state`` would build.
 
     Mirrors ``johnny/api/v1/state.py`` exactly (same serializer, same current-state
     reads), so the ``/ws/state`` backfill replays a frame byte-identical to the REST
     snapshot — the no-drift proof (TC-5a.3) without faking a tick ``ctx``.
+
+    Pass ``ts`` to freeze the event's *envelope* timestamp (``Workspace.broadcast``
+    honours a pre-set ``ts``): the captured ``/ws/state`` wire fixture carries the
+    frame's ``{type,id,ts}`` wrapper, so a fixed ``ts`` keeps that capture byte-stable
+    across re-runs the way every REST fixture row already carries a frozen ``ts``.
     """
     current_mood = await runtime.affect.current()
     mood = current_mood if current_mood.id is not None else None
@@ -220,7 +227,7 @@ async def broadcast_state_frame(runtime: SimpleNamespace) -> WorkspaceEvent:
         sleep=sleep_block,
     )
     return await runtime.workspace.broadcast(
-        WorkspaceEvent(module="cycle", type="state", payload=payload)
+        WorkspaceEvent(module="cycle", type="state", payload=payload, ts=ts)
     )
 
 

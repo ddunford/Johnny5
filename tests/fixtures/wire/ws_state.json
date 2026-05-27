@@ -1,0 +1,98 @@
+{
+  "type": "state",
+  "id": 5,
+  "ts": "2026-05-20T09:09:00+00:00",
+  "tick": 128,
+  "drives": [
+    {
+      "drive": "curiosity",
+      "value": 0.1,
+      "setpoint": 0.1,
+      "threshold": 0.65,
+      "over_threshold": false
+    },
+    {
+      "drive": "boredom",
+      "value": 0.05,
+      "setpoint": 0.05,
+      "threshold": 0.7,
+      "over_threshold": false
+    },
+    {
+      "drive": "connection",
+      "value": 0.1,
+      "setpoint": 0.1,
+      "threshold": 0.7,
+      "over_threshold": false
+    },
+    {
+      "drive": "mastery",
+      "value": 0.15,
+      "setpoint": 0.15,
+      "threshold": 0.75,
+      "over_threshold": false
+    },
+    {
+      "drive": "coherence",
+      "value": 0.1,
+      "setpoint": 0.1,
+      "threshold": 0.75,
+      "over_threshold": false
+    },
+    {
+      "drive": "energy",
+      "value": 0.1,
+      "setpoint": 0.1,
+      "threshold": 0.8,
+      "over_threshold": false
+    },
+    {
+      "drive": "continuity",
+      "value": 0.1,
+      "setpoint": 0.1,
+      "threshold": 0.85,
+      "over_threshold": false
+    }
+  ],
+  "mood": {
+    "arousal": 0.45,
+    "mood_id": 1,
+    "valence": 0.4,
+    "emotions": {
+      "curiosity": 0.6,
+      "contentment": 0.3
+    },
+    "descriptor": "calm and content, with a thread of curiosity"
+  },
+  "goals": [
+    {
+      "id": 1,
+      "plan": {
+        "steps": [
+          "recall",
+          "reflect",
+          "note"
+        ]
+      },
+      "source": "curiosity",
+      "status": "active",
+      "priority": 0.66,
+      "description": "Understand how my own recall ranking blends similarity and recency"
+    }
+  ],
+  "interval": 4.0,
+  "sleep": {
+    "last": {
+      "trigger": "energy",
+      "ended_at": "2026-05-20T08:05:00+00:00",
+      "facts_merged": 1,
+      "facts_written": 4,
+      "self_check_ok": true,
+      "degraded_stages": [],
+      "episodes_decayed": 2,
+      "self_model_version": 2
+    },
+    "asleep": false,
+    "full_agency": true
+  }
+}

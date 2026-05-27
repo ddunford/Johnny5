@@ -1,5 +1,8 @@
 # Lessons
 
+### "Idle in chat" ≠ "not running" — verify `docker ps` before taking the test-DB window
+A teammate running `./ctl.sh test` (esp. a 3× loop) as a **detached background job** shows as IDLE in the team chat — its chat-turn ended, but its pytest container is still executing against `johnny5_test`. In Phase 6a the lead misread a QA idle notification as "DB is free," launched a verification `./ctl.sh test`, and collided with QA's in-flight run 2 (the exact interleaved-TRUNCATE hazard). It was caught + killed before pytest emitted (no damage — empty output, no second container), but the rule stands: before the lead (or anyone) takes the test-DB window, **confirm no runner is live with `docker ps | grep -E 'api-run|test'`** — never infer "free" from a chat idle notification. The flip side of the single-runner rule: idle teammate + live test container = still running.
+
 ### Teammates never run destructive git on the shared working tree (single-committer model)
 In a `/team-execute` run the lead is the SOLE committer; teammates implement + report, the lead commits. A teammate must therefore never run `git checkout`/`restore`/`reset`/`clean` (or any tree-mutating git) on the shared working tree — not even to "revert" their own work. The lead may be holding uncommitted edits in those files, and a `git checkout HEAD -- <file>` would silently wipe them. In Phase 6a a teammate ran `git checkout HEAD -- <5 files>` to undo an addendum after a superseded ruling; it happened to be a no-op (the files were already committed) but it was a live risk. If something needs reverting, the teammate asks the lead to do it. (Spawn-prompt teammates with this explicitly.)
 

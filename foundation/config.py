@@ -59,6 +59,29 @@ class Settings(BaseSettings):
     groq_model: str = Field(default="llama-3.3-70b-versatile")
     groq_daily_budget_usd: float = Field(default=5.00)
 
+    # ── Memory: hybrid recall (similarity × recency × salience) ──
+    # Weights for the episodic recall blend. Defaults are equal; Phase 3 Affect
+    # and Phase 4 reflection tune these at runtime, so they are config not code.
+    memory_recall_weight_similarity: float = Field(default=1.0)
+    memory_recall_weight_recency: float = Field(default=1.0)
+    memory_recall_weight_salience: float = Field(default=1.0)
+    # Recency half-life: an episode this many seconds old scores 0.5 on recency.
+    memory_recall_recency_halflife_seconds: float = Field(default=86400.0)
+    # How many nearest-by-similarity candidates to pull before re-ranking by the
+    # full blend (the ANN step is the similarity gate; re-rank adds recency/salience).
+    memory_recall_candidate_pool: int = Field(default=50)
+
+    # ── Memory: working set (Redis, bounded + decaying) ──
+    working_memory_capacity: int = Field(default=12)
+    working_memory_default_ttl_seconds: float = Field(default=900.0)
+    # Multiplicative salience decay applied per ``decay()`` sweep.
+    working_memory_decay_factor: float = Field(default=0.9)
+    # Items whose salience falls below this after decay are evicted.
+    working_memory_salience_floor: float = Field(default=0.05)
+
+    # ── Memory: snapshots (continuity / backups, gitignored) ──
+    memory_snapshot_dir: str = Field(default="snapshots/memory")
+
     # ── LLM router tuning ──
     llm_routes_path: str = Field(default="config/llm_routes.toml")
     circuit_failure_threshold: int = Field(default=4)

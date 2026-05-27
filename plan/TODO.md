@@ -6,12 +6,10 @@ Single source of truth for open work, in order. Move items between sections; del
 
 ## In progress
 
-_(none — Phase 1 complete 2026-05-27; Phase 2 is next)_
+### Phase 2 — Heartbeat + Workspace  →  `plan/phase-2-heartbeat.md`  ⟵ team `johnny5-phase-2`
+The Global Workspace event bus + the cognitive cycle loop + the Inner Narrator. Johnny produces a continuous stream of consciousness, visible in the REPL. **Done = the first "he's alive" moment.**
 
 ## Next
-
-### Phase 2 — Heartbeat + Workspace  →  `plan/phase-2-heartbeat.md`
-The Global Workspace event bus + the cognitive cycle loop + the Inner Narrator. Johnny produces a continuous stream of consciousness, visible in the REPL. **Done = the first "he's alive" moment.**
 
 ### Phase 3 — Drives + Affect  →  `plan/phase-3-drives-affect.md`
 Drive engine (curiosity, boredom, connection, mastery, coherence, energy, continuity), urge→goal arbitration, appraisal/mood. Idle Johnny now *wants* things and acts on them. **Done = the autonomy loop closes — he explores unprompted.**

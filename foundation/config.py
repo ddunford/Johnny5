@@ -126,6 +126,23 @@ class Settings(BaseSettings):
     # (provenance unioned, confidence maxed). High, so only true restatements merge.
     semantic_merge_threshold: float = Field(default=0.95)
 
+    # ── Sleep: self-model refresh (the evolving self-concept, SPEC §5 #11) ──
+    # How many recent episodes / semantic facts the self-model reflection considers.
+    self_model_recent_episodes: int = Field(default=15)
+    self_model_recent_facts: int = Field(default=10)
+    # Token ceiling for one self-model refresh. self_model is cloud-first (Groq), but
+    # the local fallback is qwen (reasoning preamble) and the output is a sizeable
+    # JSON object (doc + values + concerns + relationships), so this needs real
+    # headroom over the preamble (the lessons.md trap). Tunable (FC-3).
+    self_model_max_tokens: int = Field(default=1536)
+
+    # ── Sleep: metacognition review (self-improvement proposals, SPEC §5 #12) ──
+    # How many recent goals / degraded-tick thoughts the review inspects.
+    metacognition_recent_goals: int = Field(default=20)
+    # Token ceiling for one metacognition review (first-person review + a few
+    # proposals as JSON). Same reasoning-preamble headroom rationale. Tunable (FC-3).
+    metacognition_max_tokens: int = Field(default=1536)
+
     # ── LLM router tuning ──
     llm_routes_path: str = Field(default="config/llm_routes.toml")
     circuit_failure_threshold: int = Field(default=4)

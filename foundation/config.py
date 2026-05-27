@@ -143,6 +143,13 @@ class Settings(BaseSettings):
     # proposals as JSON). Same reasoning-preamble headroom rationale. Tunable (FC-3).
     metacognition_max_tokens: int = Field(default=1536)
 
+    # ── Sleep cycle (the offline phase the run loop enters between ticks) ──
+    # Optional fallback cadence: force a sleep every N ticks even if Energy hasn't
+    # crossed threshold. 0 = disabled — Energy (the is_sleep_signal urge) is the real
+    # trigger (its equilibrium ~0.87 sits above its 0.80 threshold, so it always
+    # crosses while awake). A small value is handy for demos/tests. Tunable (FC-3).
+    sleep_every_ticks: int = Field(default=0)
+
     # ── LLM router tuning ──
     llm_routes_path: str = Field(default="config/llm_routes.toml")
     circuit_failure_threshold: int = Field(default=4)

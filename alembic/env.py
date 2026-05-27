@@ -27,6 +27,7 @@ import brain.memory.procedural  # noqa: F401
 import brain.memory.semantic  # noqa: F401
 import brain.metacognition.store  # noqa: F401
 import brain.self_model.store  # noqa: F401
+import brain.sleep  # noqa: F401
 import brain.workspace  # noqa: F401
 from alembic import context
 from foundation.config import get_settings

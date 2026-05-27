@@ -35,6 +35,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from foundation.db import Base, Repository, session_scope
 from foundation.observability import get_logger
+from foundation.redaction import redact_payload
 from foundation.redis_client import get_redis
 
 _log = get_logger("brain.workspace")
@@ -165,10 +166,14 @@ class Workspace:
         """Persist an event to ``workspace_event`` then publish it on the bus.
 
         Returns the event with ``id``/``ts`` populated. Persist-then-publish so
-        the durable log can't miss a broadcast that subscribers saw.
+        the durable log can't miss a broadcast that subscribers saw. The payload is
+        redacted FIRST (no-secrets-on-the-bus): both the durable ``workspace_event``
+        log (read by ``/api/v1/audit``) and the live ``/ws/consciousness`` stream
+        only ever see the scrubbed payload, never a raw credential.
         """
         stamped = event if event.ts is not None else event.model_copy(update={"ts": self._now_fn()})
-        persisted = await self._persist(stamped)
+        safe = stamped.model_copy(update={"payload": redact_payload(stamped.payload)})
+        persisted = await self._persist(safe)
         await self._publish(persisted)
         return persisted
 

@@ -25,6 +25,7 @@ import json
 from sqlalchemy import text
 
 from foundation.db import session_scope
+from foundation.redaction import redact_payload
 
 # The physical table the writer appends to. Referenced by name (FC-1) so the Core
 # never imports the Mind's ORM model; must match
@@ -65,14 +66,21 @@ class AuditWriter:
         (it never ran). ``ts``/``id`` come from the table's server defaults. Each
         call is its own committed transaction — the durable record can't be lost to
         a later rollback in the caller.
+
+        ``args`` and ``result`` are **redacted before persistence** (no-secrets-on-
+        the-bus): a tool's args/result can carry credentials, and ``/api/v1/audit``
+        is world-readable to a token-holder. The Core redacts its own writes rather
+        than trusting the Mind to have done so (FC-1).
         """
+        safe_args = redact_payload(args)
+        safe_result = redact_payload(result) if result is not None else None
         async with session_scope() as session:
             await session.execute(
                 _INSERT_SQL,
                 {
                     "tool": tool,
-                    "args": json.dumps(args),
-                    "result": json.dumps(result) if result is not None else None,
+                    "args": json.dumps(safe_args),
+                    "result": json.dumps(safe_result) if safe_result is not None else None,
                     "conscience_verdict": conscience_verdict,
                     "veto_reason": veto_reason,
                     "goal_id": goal_id,

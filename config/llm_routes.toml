@@ -31,6 +31,12 @@ affect = ["fast"]
 perception = ["fast"]
 vision = ["fast"]
 
+# Conscience vets every action BEFORE it runs (the CHECK stage), so it sits on the
+# hot path and must be cheap + always-available → local/fast (SPEC §10). Keeping it
+# off cloud also means a vet can't be the thing that exhausts the budget. A short
+# values-judgement, no heavy reasoning — gemma4 handles it.
+conscience = ["fast"]
+
 # Deliberation fires UNPROMPTED on the heartbeat in Phase 3 (the autonomy loop), so
 # it is LOCAL-FIRST: its 1–2 sentence internal reflections don't need a cloud 70b,
 # and local-first keeps the autonomous loop $0-marginal by default. The

@@ -181,6 +181,14 @@ class Settings(BaseSettings):
     # How many memories a recall/consolidate action surfaces.
     deliberation_recall_k: int = Field(default=4)
 
+    # ── Conscience (CHECK stage — Johnny's values vetting an action, SPEC §5 #14) ──
+    # The Conscience judges a proposed (tool, args) against Johnny's *values only*
+    # (FC-9) on the local/fast `conscience` role. It asks for a small JSON verdict
+    # ({"verdict","reason"}); like the other local schema roles, the fast model can
+    # emit a short reasoning preamble before the JSON, so the ceiling must clear the
+    # preamble + the verdict object (the lessons.md token-trap). Tunable (FC-3).
+    conscience_max_tokens: int = Field(default=512)
+
     # ── Goal arbitration (urge → goal, with anti-thrash hysteresis) ──
     # A promoted goal is held for at least this long before any competing urge can
     # displace it — the anti-thrash guard so Johnny doesn't flip-flop between

@@ -1,0 +1,101 @@
+{
+  "query": "mars rover",
+  "number_of_results": 2530,
+  "results": [
+    {
+      "url": "https://en.wikipedia.org/wiki/Mars_rover",
+      "title": "Mars rover - Wikipedia",
+      "content": "A Mars rover is a remote-controlled motor vehicle designed to travel on the surface of Mars. Rovers have several advantages over stationary landers.",
+      "thumbnail": "data:image/jpeg;base64,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",
+      "engine": "google",
+      "template": "default.html",
+      "parsed_url": [
+        "https",
+        "en.wikipedia.org",
+        "/wiki/Mars_rover",
+        "",
+        "",
+        ""
+      ],
+      "img_src": "",
+      "priority": "",
+      "engines": [
+        "google"
+      ],
+      "positions": [
+        1,
+        2
+      ],
+      "score": 3.0,
+      "category": "general",
+      "publishedDate": null
+    },
+    {
+      "url": "https://science.nasa.gov/mission/mars-2020-perseverance/",
+      "title": "Mars 2020: Perseverance Rover - NASA Science",
+      "content": "May 18, 2026 · NASA’s Mars Perseverance rover seeks signs of ancient life and collects samples of rock and regolith for possible Earth return.",
+      "thumbnail": "data:image/jpeg;base64,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",
+      "engine": "google",
+      "template": "default.html",
+      "parsed_url": [
+        "https",
+        "science.nasa.gov",
+        "/mission/mars-2020-perseverance/",
+        "",
+        "",
+        ""
+      ],
+      "img_src": "",
+      "priority": "",
+      "engines": [
+        "bing",
+        "google"
+      ],
+      "positions": [
+        5,
+        6,
+        2
+      ],
+      "score": 2.6,
+      "category": "general",
+      "publishedDate": null
+    },
+    {
+      "url": "https://en.m.wikipedia.org/wiki/Mars_rover",
+      "title": "Mars rover - Wikipedia",
+      "content": "A Mars rover is a remote-controlled motor vehicle designed to travel on the surface of Mars. Rovers have several advantages over stationary landers: they examine more territory, they can be directed to …",
+      "engine": "bing",
+      "template": "default.html",
+      "parsed_url": [
+        "https",
+        "en.m.wikipedia.org",
+        "/wiki/Mars_rover",
+        "",
+        "",
+        ""
+      ],
+      "img_src": "",
+      "thumbnail": "",
+      "priority": "",
+      "engines": [
+        "bing"
+      ],
+      "positions": [
+        1
+      ],
+      "score": 1.0,
+      "category": "general",
+      "publishedDate": null
+    }
+  ],
+  "answers": [],
+  "corrections": [],
+  "infoboxes": [],
+  "suggestions": [],
+  "unresponsive_engines": [
+    [
+      "brave",
+      "too many requests"
+    ]
+  ]
+}

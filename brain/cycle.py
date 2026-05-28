@@ -43,6 +43,7 @@ from brain.agents.deliberation import Action, ActionOutcome, DeliberationResult
 from brain.drives.engine import EVENT_INTERACTION, SLEEP_DRIVE, DriveEvent, DriveReading, Urge
 from brain.effectors.dispatch import EffectorDispatch, VettedAction
 from brain.effectors.scheduler import Scheduler
+from brain.effectors.web_consolidator import WEB_READ_TOOLS, WebReadConsolidator
 from brain.goals.store import Goal, goals_to_payload
 from brain.memory.working import WorkingMemory, WorkingMemoryItem
 from brain.sleep import CheckResult, SleepCycle, SleepLog, SleepReport
@@ -267,6 +268,7 @@ class CognitiveCycle:
         dispatch: EffectorDispatch | None = None,
         sleep_cycle: SleepCycle | None = None,
         scheduler: Scheduler | None = None,
+        web_consolidator: WebReadConsolidator | None = None,
         working_memory: WorkingMemory | None = None,
         interval_seconds: float = 4.0,
         min_interval_seconds: float = 1.5,
@@ -289,6 +291,7 @@ class CognitiveCycle:
         self._dispatch = dispatch
         self._sleep_cycle = sleep_cycle
         self._scheduler = scheduler
+        self._web_consolidator = web_consolidator
         self._working_memory = working_memory
         self._interval = interval_seconds
         # Bounds on the affect-modulated interval (the floor is the 3.12 spin guard).
@@ -917,13 +920,42 @@ class CognitiveCycle:
         if self._dispatch is None or ctx.vetted is None or ctx.goal is None:
             return
         outcome = await self._dispatch.commit(ctx.vetted)
-        success = outcome.ran and (outcome.result.success if outcome.result is not None else False)
+        ran_ok = outcome.ran and (outcome.result.success if outcome.result is not None else False)
+
+        # Curiosity loop (FC: "reading without remembering is wasted", SPEC §8): a
+        # web-read tool isn't *done* until its content is consolidated into memory —
+        # the satisfaction that eases the drive fires on the CONSOLIDATION, not the
+        # raw fetch. So for a web-read tool, success is gated on a successful
+        # consolidation; other tools settle on their own result as before.
+        tool = ctx.action.tool if ctx.action is not None else None
+        success = ran_ok
+        if ran_ok and tool in WEB_READ_TOOLS and outcome.result is not None:
+            success = await self._consolidate_web_read(tool, outcome.result.output)
+
         # Goal resolution lives in Deliberation (it owns the GoalStore); call it only
         # when supported, so a bare DeliberationStage double isn't required to have it.
         settle = getattr(self._deliberation, "settle_tool_action", None)
         if callable(settle):
             for event in await settle(ctx.goal, summary=outcome.summary, success=success):
                 self.enqueue_drive_event(event)
+
+    async def _consolidate_web_read(self, tool: str | None, output: dict[str, object]) -> bool:
+        """Consolidate a web-read tool's content into memory; True iff it was remembered.
+
+        The "remember" step of the curiosity loop. A consolidation failure (or no
+        consolidator wired / nothing to remember) degrades to ``False`` — the read
+        eases nothing, so Johnny keeps looking — and never crashes the tick.
+        """
+        if self._web_consolidator is None or tool is None:
+            return False
+        try:
+            result = await self._web_consolidator.consolidate_tool_result(tool, output)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # consolidation degrades, the heartbeat goes on
+            _log.warning("cycle.web_read.consolidate_failed", tool=tool, error=str(exc))
+            return False
+        return result is not None
 
     async def _dispatch_action(self, action: dict[str, object]) -> None:
         """Broadcast an internal action's outcome on the bus (FC-5 seam, internal path).

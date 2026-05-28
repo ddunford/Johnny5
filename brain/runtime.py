@@ -21,7 +21,7 @@ from brain.affect.agent import Affect
 from brain.agents import AgentRegistry
 from brain.agents.attention import Attention
 from brain.agents.conscience import Conscience
-from brain.agents.deliberation import Deliberation
+from brain.agents.deliberation import DEFAULT_TOOL_ACTIONS, Deliberation
 from brain.agents.memory_stages import EpisodicLearner, MemoryRecaller
 from brain.agents.narrator import Narrator
 from brain.agents.sensorium import InputQueue, Sensorium
@@ -29,9 +29,11 @@ from brain.cycle import CognitiveCycle
 from brain.cycle_control import CycleControlListener
 from brain.drives.engine import DriveEngine
 from brain.effectors.action_log import ActionAuditReader
+from brain.effectors.belt import build_tool_registry
 from brain.effectors.dispatch import EffectorDispatch
+from brain.effectors.notes import NoteStore
 from brain.effectors.scheduler import Scheduler
-from brain.effectors.tools import default_tool_registry
+from brain.effectors.web_consolidator import WebReadConsolidator
 from brain.goals.store import GoalStore
 from brain.llm.router import LLMRouter, build_router
 from brain.memory.consolidator import Consolidator
@@ -78,6 +80,7 @@ class CognitiveRuntime:
         identity: IdentityStore,
         metacognition: MetacognitionStore,
         action_audit: ActionAuditReader,
+        notes: NoteStore,
     ) -> None:
         self.workspace = workspace
         self.registry = registry
@@ -95,6 +98,7 @@ class CognitiveRuntime:
         self.identity = identity
         self.metacognition = metacognition
         self.action_audit = action_audit
+        self.notes = notes
         self._control = CycleControlListener(cycle)
         self._bus_task: asyncio.Task[None] | None = None
         self._cycle_task: asyncio.Task[None] | None = None
@@ -191,31 +195,42 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
     # (reflect/recall/consolidate/formulate-question) — external tools are Phase 6.
     # It shares the one GoalStore the web API reads (GET /api/v1/goals), so the
     # goals panel reflects exactly what Deliberation is pursuing.
+    # Deliberation closes the autonomy loop (FC-2/FC-3). In 6b it can select an
+    # EXTERNAL tool for a goal (Curiosity→news, Boredom→web_search, Coherence→
+    # memory_search, Mastery→code_exec) via DEFAULT_TOOL_ACTIONS; the query/snippet is
+    # derived from the goal (the code_exec snippet via an LLM step). Internal actions
+    # remain the fallback. Shares the one GoalStore the web API reads (GET /goals).
     goal_store = GoalStore()
-    deliberation = Deliberation(router, store=goal_store)
+    deliberation = Deliberation(router, store=goal_store, tool_actions=DEFAULT_TOOL_ACTIONS)
     registry.register(deliberation)
 
-    # The safe-action substrate (Phase 6a). The Conscience is a registered,
-    # prompt-backed inner agent (FC-2/FC-3) that vets a proposed action at CHECK;
-    # the EffectorDispatch is the single FC-5 point that runs an allowed tool from
-    # the belt and writes the append-only action_log via the Core's import-isolated
-    # AuditWriter (FC-1). The belt ships only the inert `noop` tool this phase — no
-    # world-touching tool yet (6b) — and Deliberation isn't mapped to auto-pick it,
-    # so the heartbeat is unperturbed; the substrate is wired + ready for 6b's tools.
+    # The Scheduler is a between-ticks run-loop phase (FC-7): it fires due
+    # self-scheduled wakeups by injecting a self-percept onto the SAME InputQueue the
+    # Sensorium drains, so a wakeup flows through the normal perception path. Built
+    # before the belt so the schedule_wakeup tool can share this one instance.
+    scheduler = Scheduler(input_queue=input_queue)
+
+    # The safe-action substrate (Phase 6a) now carrying 6b's full belt. The Conscience
+    # is a registered, prompt-backed inner agent (FC-2/FC-3) that vets a proposed
+    # action at CHECK; the EffectorDispatch is the single FC-5 point that runs an
+    # allowed tool from the belt and writes the append-only action_log via the Core's
+    # import-isolated AuditWriter (FC-1). The belt is built with every 6b tool
+    # registered (web/news/fetch/code/note/memory/schedule) — each is automatically
+    # vetted + audited just by being on the belt.
     conscience = Conscience(router)
     registry.register(conscience)
     dispatch = EffectorDispatch(
-        registry=default_tool_registry(),
+        registry=build_tool_registry(scheduler=scheduler),
         conscience=conscience,
         audit=AuditWriter(),
         broadcaster=workspace,
     )
 
-    # The Scheduler is a between-ticks run-loop phase (FC-7): it fires due
-    # self-scheduled wakeups by injecting a self-percept onto the SAME InputQueue the
-    # Sensorium drains, so a wakeup flows through the normal perception path. It
-    # shares that one queue (not a second one) so a fired wakeup is perceived next tick.
-    scheduler = Scheduler(input_queue=input_queue)
+    # The WebReadConsolidator closes the curiosity loop: after a web-read tool runs,
+    # the cycle hands its content here to be summarised into memory (episode + fact
+    # with url provenance) — the satisfaction that eases Curiosity fires on THIS, not
+    # the fetch (SPEC §8). Uses the same consolidation role/router as sleep (FC-4).
+    web_consolidator = WebReadConsolidator(router=router)
 
     # Memory recall/learn are stage collaborators, not bus agents (no prompt to
     # edit) — they bridge the cycle to the Phase-1 memory spine.
@@ -255,6 +270,7 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
         dispatch=dispatch,
         sleep_cycle=sleep_cycle,
         scheduler=scheduler,
+        web_consolidator=web_consolidator,
         working_memory=working_memory,
         interval_seconds=settings.cycle_base_interval_seconds,
         min_interval_seconds=settings.cycle_min_interval_seconds,
@@ -274,6 +290,8 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
     api_metacognition = MetacognitionStore()
     # Read facade over the durable action_log trail (GET /api/v1/audit/actions).
     api_action_audit = ActionAuditReader()
+    # Read store for Johnny's journal (GET /api/v1/notes) — newest-first.
+    api_notes = NoteStore()
 
     return CognitiveRuntime(
         workspace=workspace,
@@ -292,4 +310,5 @@ def build_runtime(settings: Settings) -> CognitiveRuntime:
         identity=api_identity,
         metacognition=api_metacognition,
         action_audit=api_action_audit,
+        notes=api_notes,
     )

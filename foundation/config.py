@@ -180,6 +180,10 @@ class Settings(BaseSettings):
     deliberation_max_tokens: int = Field(default=320)
     # How many memories a recall/consolidate action surfaces.
     deliberation_recall_k: int = Field(default=4)
+    # Token ceiling when Deliberation formulates a code_exec snippet for a Mastery
+    # goal (free-text Python, no schema). Generous enough for a short snippet; the
+    # tool's char cap (code_exec_max_code_chars) is the hard bound on what runs.
+    mastery_code_max_tokens: int = Field(default=600)
 
     # ── Conscience (CHECK stage — Johnny's values vetting an action, SPEC §5 #14) ──
     # The Conscience judges a proposed (tool, args) against Johnny's *values only*

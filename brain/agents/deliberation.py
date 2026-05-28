@@ -38,6 +38,7 @@ from brain.drives.engine import (
     DriveEvent,
     Urge,
 )
+from brain.effectors.code_exec import CODE_EXEC_TOOL_NAME
 from brain.goals.arbiter import GoalArbiter
 from brain.goals.store import Goal, GoalStore
 from brain.llm.base import LLMUnavailableError, Message
@@ -84,6 +85,30 @@ _DRIVE_SATISFACTION: dict[str, tuple[str, float]] = {
 }
 
 _AMBIENT_KIND = "ambient"
+
+# External tools whose primary arg is a query/topic DERIVED from the goal + workspace
+# (vs static args). ``plan()`` injects it so a curiosity goal searches for what's
+# actually on Johnny's mind, not a fixed string. Maps tool name → its query arg.
+_TOOL_QUERY_ARG: dict[str, str] = {
+    "web_search": "query",
+    "news": "topic",
+    "memory_search": "query",
+}
+
+# Drive source → the EXTERNAL tool a promoted goal acts through (Phase 6b). The
+# query-bearing tools above get a goal-derived query injected in ``plan()``.
+# Curiosity reads the news (his primary "needs input" feed, SPEC §9.1); Boredom
+# searches the web; Coherence searches his own memory to make sense of himself.
+# Connection (real contact is messaging, Phase 8), Mastery (running code needs an
+# LLM step to *formulate* the snippet — it doesn't fit the rule-based plan), and
+# Continuity stay on their internal actions (the fallback). Wired into Deliberation
+# in the composition root alongside the registry registration (TASK-6b.10).
+DEFAULT_TOOL_ACTIONS: dict[str, tuple[str, dict[str, object]]] = {
+    "curiosity": ("news", {}),
+    "boredom": ("web_search", {}),
+    "coherence": ("memory_search", {}),
+    "mastery": ("code_exec", {}),
+}
 
 
 # ── domain types ─────────────────────────────────────────────────────────────
@@ -175,6 +200,10 @@ class Deliberation:
             if min_interval_seconds is not None
             else settings.deliberation_min_interval_seconds
         )
+        # code_exec snippet formulation (Mastery→code): token ceiling + the same arg
+        # cap the tool enforces, so a formulated snippet is bounded before it's proposed.
+        self._code_max_tokens = settings.mastery_code_max_tokens
+        self._code_max_chars = settings.code_exec_max_code_chars
         self._now_fn = now_fn
         self._last_acted: datetime | None = None
 
@@ -205,7 +234,11 @@ class Deliberation:
             return DeliberationResult(goal=None, action=None)
         if not self._due(reference):
             return DeliberationResult(goal=goal, action=None)
-        return DeliberationResult(goal=goal, action=self.plan(goal, contents))
+        # plan() is pure (rule-based). A code_exec action then needs its snippet
+        # *formulated* — an async LLM step — so that finalisation happens here, not
+        # in plan(); a tired model falls back to the internal action.
+        action = await self._finalise_action(self.plan(goal, contents), goal, contents)
+        return DeliberationResult(goal=goal, action=action)
 
     def plan(self, goal: Goal, contents: Sequence[WorkspaceItem]) -> Action:
         """Map a goal to an action (pure, rule-based — no I/O).
@@ -216,14 +249,25 @@ class Deliberation:
         proposal = self._tool_actions.get(goal.source)
         if proposal is not None:
             tool_name, tool_args = proposal
+            args = dict(tool_args)
+            # A query-bearing external tool (web_search/news/memory_search) searches
+            # for what's actually on Johnny's mind — inject the derived query unless
+            # the wiring already pinned one.
+            query_arg = _TOOL_QUERY_ARG.get(tool_name)
+            if query_arg is not None and query_arg not in args:
+                args[query_arg] = self._query_from(goal, contents)
             return Action(
                 kind=tool_name,
                 goal_id=goal.id,
                 goal_source=goal.source,
                 description=goal.description,
                 tool=tool_name,
-                tool_args=dict(tool_args),
+                tool_args=args,
             )
+        return self._internal_action(goal, contents)
+
+    def _internal_action(self, goal: Goal, contents: Sequence[WorkspaceItem]) -> Action:
+        """The non-tool action for a goal (reflect/recall/consolidate/formulate)."""
         kind = _DRIVE_ACTION.get(goal.source, ACTION_REFLECT)
         return Action(
             kind=kind,
@@ -232,6 +276,58 @@ class Deliberation:
             description=goal.description,
             query=self._query_from(goal, contents),
         )
+
+    async def _finalise_action(
+        self, action: Action, goal: Goal, contents: Sequence[WorkspaceItem]
+    ) -> Action:
+        """Fill in any tool args that need an async step (the ``code_exec`` snippet).
+
+        ``code_exec`` is the one tool whose arg can't be derived rule-based — running
+        code means *writing* it, an LLM step. We formulate the snippet here; if every
+        provider is tired (or there's no router), we fall back to the goal's internal
+        action rather than propose an empty/unsafe ``code_exec`` (the heartbeat goes
+        on, the drive just isn't met by code this time). The snippet is still
+        Conscience-vetted at CHECK and sandboxed at ACT — this only chooses *what* to run.
+        """
+        if action.tool != CODE_EXEC_TOOL_NAME or action.tool_args.get("code"):
+            return action
+        code = await self._formulate_code(goal, contents)
+        if not code:
+            return self._internal_action(goal, contents)
+        return action.model_copy(update={"tool_args": {**action.tool_args, "code": code}})
+
+    async def _formulate_code(self, goal: Goal, contents: Sequence[WorkspaceItem]) -> str | None:
+        """Ask the model for a short, self-contained Python snippet for a Mastery goal.
+
+        Free-text (no schema), markdown fences stripped, length-capped. Returns
+        ``None`` when tired/router-less so the caller degrades to an internal action.
+        """
+        if self._router is None:
+            return None
+        focus = self._query_from(goal, contents)
+        instruction = (
+            f"You feel a pull to {goal.description}. Write a SHORT, self-contained "
+            "Python 3 snippet you could run to explore or work on that — it runs in an "
+            "isolated sandbox with NO network and only the standard library, and its "
+            "stdout is what you'll see. Keep it well under 40 lines. "
+            f"What's on your mind: {focus}. Output ONLY the code, no prose, no fences."
+        )
+        messages = [
+            Message(role="system", content=self.prompt or _DEFAULT_SYSTEM),
+            Message(role="user", content=instruction),
+        ]
+        try:
+            completion = await self._router.complete(
+                DELIBERATION_ROLE,
+                messages,
+                temperature=_TEMPERATURE,
+                max_tokens=self._code_max_tokens,
+            )
+        except LLMUnavailableError:
+            _log.info("deliberation.code.tired", goal=goal.source)
+            return None
+        snippet = _strip_code_fences(completion.content)[: self._code_max_chars]
+        return snippet or None
 
     async def settle_tool_action(
         self, goal: Goal, *, summary: str, success: bool
@@ -396,6 +492,19 @@ class Deliberation:
                 salience=0.55,
             )
         )
+
+
+def _strip_code_fences(text: str) -> str:
+    """Strip a leading/trailing markdown code fence the model may wrap a snippet in."""
+    stripped = text.strip()
+    if not stripped.startswith("```"):
+        return stripped
+    lines = stripped.splitlines()
+    if lines and lines[0].startswith("```"):  # drop the opening ```lang line
+        lines = lines[1:]
+    if lines and lines[-1].strip().startswith("```"):  # drop the closing fence
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
 
 
 _DEFAULT_SYSTEM = (

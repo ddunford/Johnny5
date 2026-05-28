@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from johnny.api.v1 import audit, goals, memory, self_model, sleeps, state, thoughts
+from johnny.api.v1 import audit, goals, memory, notes, self_model, sleeps, state, thoughts
 from johnny.api.v1 import input as input_routes
 from johnny.api.v1.auth import require_token
 
@@ -23,6 +23,7 @@ v1_router.include_router(input_routes.router)
 v1_router.include_router(state.router)
 v1_router.include_router(thoughts.router)
 v1_router.include_router(audit.router)
+v1_router.include_router(notes.router)
 v1_router.include_router(memory.router)
 v1_router.include_router(goals.router)
 v1_router.include_router(sleeps.router)

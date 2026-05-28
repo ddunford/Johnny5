@@ -175,6 +175,75 @@ async def test_tired_router_degrades_to_fallback(memory_db: AsyncEngine) -> None
     assert result.fact.source_episode_ids == [result.episode.id]
 
 
+async def test_consolidate_tool_result_from_web_fetch(memory_db: AsyncEngine) -> None:
+    embedder = DeterministicEmbedder()
+    consolidator = WebReadConsolidator(
+        episodic=EpisodicMemory(embedder), semantic=SemanticMemory(embedder), router=None
+    )
+    output = {
+        "url": "https://example.com/a",
+        "title": "An Article",
+        "text": "The full readable body of the article goes here.",
+    }
+
+    result = await consolidator.consolidate_tool_result("web_fetch", output)
+
+    assert result is not None
+    assert result.url == "https://example.com/a"
+    assert "https://example.com/a" in result.episode.content
+
+
+async def test_consolidate_tool_result_from_news_top_item(memory_db: AsyncEngine) -> None:
+    embedder = DeterministicEmbedder()
+    consolidator = WebReadConsolidator(
+        episodic=EpisodicMemory(embedder), semantic=SemanticMemory(embedder), router=None
+    )
+    output = {
+        "topic": "mars",
+        "results": [
+            {"title": "Rover lands", "url": "https://news.example/1", "snippet": "It landed."},
+            {"title": "Other", "url": "https://news.example/2", "snippet": "Else."},
+        ],
+        "count": 2,
+    }
+
+    result = await consolidator.consolidate_tool_result("news", output)
+
+    assert result is not None
+    assert result.url == "https://news.example/1"  # the top item
+    assert "Rover lands" in result.episode.content
+
+
+async def test_consolidate_tool_result_none_for_non_web_tool(memory_db: AsyncEngine) -> None:
+    consolidator = WebReadConsolidator(
+        episodic=EpisodicMemory(DeterministicEmbedder()),
+        semantic=SemanticMemory(DeterministicEmbedder()),
+        router=None,
+    )
+    assert await consolidator.consolidate_tool_result("note", {"id": 1}) is None
+
+
+async def test_consolidate_tool_result_none_for_empty_results(memory_db: AsyncEngine) -> None:
+    consolidator = WebReadConsolidator(
+        episodic=EpisodicMemory(DeterministicEmbedder()),
+        semantic=SemanticMemory(DeterministicEmbedder()),
+        router=None,
+    )
+    assert await consolidator.consolidate_tool_result("web_search", {"results": []}) is None
+
+
+async def test_consolidate_tool_result_none_for_web_fetch_without_text(
+    memory_db: AsyncEngine,
+) -> None:
+    consolidator = WebReadConsolidator(
+        episodic=EpisodicMemory(DeterministicEmbedder()),
+        semantic=SemanticMemory(DeterministicEmbedder()),
+        router=None,
+    )
+    out = {"url": "https://e.com/x", "title": "T", "text": ""}
+    assert await consolidator.consolidate_tool_result("web_fetch", out) is None
+
+
 async def test_episode_excerpt_is_bounded(memory_db: AsyncEngine) -> None:
     embedder = DeterministicEmbedder()
     consolidator = WebReadConsolidator(

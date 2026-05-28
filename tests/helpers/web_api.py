@@ -58,6 +58,7 @@ from brain.agents.sensorium import InputQueue
 from brain.cycle import serialize_sleep_block, serialize_state, sleep_summary_from_log
 from brain.drives.engine import DriveEngine
 from brain.effectors.action_log import ActionAuditReader
+from brain.effectors.notes import Note, NoteStore
 from brain.goals.store import Goal, GoalStore
 from brain.memory.episodic import Episode, EpisodicMemory
 from brain.memory.semantic import SemanticFact, SemanticMemory
@@ -79,8 +80,9 @@ WIRE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "wire"
 # Tables the web-API suite touches (children-first, FK-safe). Superset across every
 # read endpoint: workspace_event (thoughts/audit), percept (input round-trip),
 # episode + semantic_* (memory), goal/mood/drive_state (state + goals), sleep_log,
-# identity + self_improvement_note (self). ``TRUNCATE ... RESTART IDENTITY CASCADE``
-# leaves each empty with ids reset for deterministic id/order assertions + captures.
+# identity + self_improvement_note (self), note (journal /notes). ``TRUNCATE ...
+# RESTART IDENTITY CASCADE`` leaves each empty with ids reset for deterministic
+# id/order assertions + captures (so a note-less test sees the true empty default).
 API_TABLES = (
     "semantic_edge",
     "semantic_fact",
@@ -96,6 +98,7 @@ API_TABLES = (
     "goal",
     "mood",
     "drive_state",
+    "note",
 )
 
 SeedFn = Callable[[SimpleNamespace], Awaitable[None]]
@@ -179,6 +182,7 @@ def build_api_app(
             drives=drives,
             affect=Affect(router=None),
             action_audit=ActionAuditReader(),
+            notes=NoteStore(),
             cycle=cycle,
             embedder=shared_embedder,
         )
@@ -446,6 +450,13 @@ async def seed_note(
     return await MetacognitionStore().add_note(
         SelfImprovementNote(observation=observation, proposal=proposal, ts=ts)
     )
+
+
+async def seed_journal_note(
+    *, title: str, body: str, tags: list[str] | None = None, ts: datetime | None = None
+) -> Note:
+    """Write one journal note — a ``/notes`` row (the ``note`` table, the ``note`` tool's store)."""
+    return await NoteStore().add(Note(title=title, body=body, tags=tags or [], ts=ts))
 
 
 # ── the comprehensive populated seed (shared by shape tests + populated capture) ─

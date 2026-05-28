@@ -179,6 +179,25 @@ class ActionAuditResponse(BaseModel):
     actions: list[ActionAudit] = Field(default_factory=list)
 
 
+# ── GET /notes ───────────────────────────────────────────────────────────────
+
+
+class NoteItem(BaseModel):
+    """One journal entry Johnny wrote via the ``note`` tool (newest-first projection)."""
+
+    id: int | None = None
+    ts: str | None = None
+    title: str
+    body: str
+    tags: list[str] = Field(default_factory=list)
+
+
+class NotesResponse(BaseModel):
+    """Recent journal notes, newest first (projection of the ``note`` table)."""
+
+    notes: list[NoteItem] = Field(default_factory=list)
+
+
 # ── GET /memory/episodes ───────────────────────────────────────────────────────
 
 

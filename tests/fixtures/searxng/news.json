@@ -1,0 +1,124 @@
+{
+  "query": "mars",
+  "number_of_results": 0,
+  "results": [
+    {
+      "template": "default.html",
+      "title": "China completes historic Mars spacecraft landing",
+      "content": "An uncrewed Chinese spacecraft successfully landed on the surface of Mars on Saturday, state news agency Xinhua reported, making China the second space-faring nation after the United States to land on the Red Planet.",
+      "img_src": "",
+      "iframe_src": "",
+      "audio_src": "",
+      "thumbnail": "https://www.reuters.com/resizer/v2/DZBYAGU6AFJN7ECAOKPY25MU3I.jpg?auth=528aa64ac515e2b9c056aea0cbb98ed4b871c9928d362ea67353562c2f08e776&height=80",
+      "publishedDate": "2021-05-15T11:04:25+00:00",
+      "pubdate": "2021-05-15 11:04:25+0000",
+      "length": null,
+      "views": "",
+      "author": "",
+      "metadata": null,
+      "priority": "",
+      "engines": [
+        "reuters"
+      ],
+      "open_group": false,
+      "close_group": false,
+      "positions": [
+        1
+      ],
+      "score": 1.0,
+      "category": "news",
+      "url": "https://www.reuters.com/lifestyle/science/chinese-spacecraft-successfully-lands-surface-mars-xinhua-2021-05-15/",
+      "engine": "reuters",
+      "parsed_url": [
+        "https",
+        "www.reuters.com",
+        "/lifestyle/science/chinese-spacecraft-successfully-lands-surface-mars-xinhua-2021-05-15/",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "title": "30 Seconds to Mars Is Making Fans Scan Their Eyes To Buy Tickets - Gadget Review",
+      "url": "https://www.gadgetreview.com/30-seconds-to-mars-is-making-fans-scan-their-eyes-to-buy-tickets",
+      "publishedDate": "2026-05-27T16:32:23",
+      "thumbnail": "https://s1.qwant.com/thumbr/0x168/3/f/5e97bf46fa30998731a45983e393d90b13f77c2c414c4a79db154b0e914221/Thirty-Seconds-to-Mars-.jpg?u=https%3A%2F%2Fwww.gadgetreview.com%2Fwp-content%2Fuploads%2FThirty-Seconds-to-Mars-.jpg&q=0&b=1&p=0&a=0",
+      "engine": "qwant news",
+      "template": "default.html",
+      "parsed_url": [
+        "https",
+        "www.gadgetreview.com",
+        "/30-seconds-to-mars-is-making-fans-scan-their-eyes-to-buy-tickets",
+        "",
+        "",
+        ""
+      ],
+      "content": "",
+      "img_src": "",
+      "priority": "",
+      "engines": [
+        "qwant news"
+      ],
+      "positions": [
+        1
+      ],
+      "score": 1.0,
+      "category": "news",
+      "pubdate": "2026-05-27 16:32:23"
+    },
+    {
+      "template": "default.html",
+      "title": "Mars to buy healthy food maker Kevin's Natural Foods",
+      "content": "Family-owned food giant Mars Inc on Wednesday agreed to buy Kevin's Natural Foods, which is known for its sous-vide meals, sauces, and side dishes, the companies said.",
+      "img_src": "",
+      "iframe_src": "",
+      "audio_src": "",
+      "thumbnail": "https://www.reuters.com/resizer/v2/TK3JMFGNCZIV5D53LJXS6LLAEM.jpg?auth=879dca59d3c0da30cb7e27c06cf81bc48cf09ea0d3f13cce401f3246d84751a1&height=80",
+      "publishedDate": "2023-07-05T16:21:35+00:00",
+      "pubdate": "2023-07-05 16:21:35+0000",
+      "length": null,
+      "views": "",
+      "author": "",
+      "metadata": null,
+      "priority": "",
+      "engines": [
+        "reuters"
+      ],
+      "open_group": false,
+      "close_group": false,
+      "positions": [
+        2
+      ],
+      "score": 0.5,
+      "category": "news",
+      "url": "https://www.reuters.com/markets/deals/mars-buy-healthy-food-maker-kevins-natural-foods-2023-07-05/",
+      "engine": "reuters",
+      "parsed_url": [
+        "https",
+        "www.reuters.com",
+        "/markets/deals/mars-buy-healthy-food-maker-kevins-natural-foods-2023-07-05/",
+        "",
+        "",
+        ""
+      ]
+    }
+  ],
+  "answers": [],
+  "corrections": [],
+  "infoboxes": [],
+  "suggestions": [],
+  "unresponsive_engines": [
+    [
+      "brave.news",
+      "Suspended: too many requests"
+    ],
+    [
+      "startpage news",
+      "CAPTCHA"
+    ],
+    [
+      "yahoo news",
+      "HTTP protocol error"
+    ]
+  ]
+}

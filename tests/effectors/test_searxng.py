@@ -45,6 +45,13 @@ def test_parse_empty_envelope_is_empty(load_fixture: Callable[[str], Any]) -> No
     assert parse_search_results(load_fixture("searxng/search.empty.json")) == []
 
 
+def test_parse_projects_the_news_envelope(load_fixture: Callable[[str], Any]) -> None:
+    # The captured news envelope carries publishedDate — the projection keeps it.
+    results = parse_search_results(load_fixture("searxng/news.json"))
+    assert results
+    assert any(r.published_date for r in results)
+
+
 def test_parse_skips_results_without_a_url() -> None:
     payload: dict[str, object] = {
         "results": [{"title": "no url"}, {"url": "https://x.com", "title": "ok"}]
@@ -82,6 +89,20 @@ async def test_client_sends_the_verified_contract(load_fixture: Callable[[str], 
     assert seen["categories"] == "general"
     assert seen["q"] == "mars rover"
     assert len(results) >= 1
+
+
+async def test_client_omits_engines_when_none() -> None:
+    # News scopes to the category's own engines — forcing the general set pollutes it.
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(dict(request.url.params))
+        return httpx.Response(200, json={"results": []})
+
+    await _client(handler).search("mars", categories="news", engines=None)
+
+    assert "engines" not in seen  # omitted
+    assert seen["categories"] == "news"
 
 
 async def test_client_raises_searxng_error_on_http_error() -> None:
@@ -129,3 +150,11 @@ async def test_live_searxng_round_trip() -> None:
     assert results, "curated-engine query should return hits from the real box"
     assert all(r.url for r in results)
     assert any(r.title for r in results)
+
+
+@pytest.mark.live
+async def test_live_searxng_news_round_trip() -> None:
+    """Real news-category round-trip (no forced engines) — returns dated items. --live."""
+    results = await SearXNGClient().search("mars", categories="news", engines=None)
+    assert results, "news category should return items from the real box"
+    assert any(r.published_date for r in results), "news results should carry publishedDate"

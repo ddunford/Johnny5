@@ -32,6 +32,20 @@ _log = get_logger("brain.effectors.searxng")
 
 # The general-search category (web_search); news uses its own (see news.py).
 CATEGORY_GENERAL = "general"
+CATEGORY_NEWS = "news"
+
+
+class _DefaultEngines:
+    """Sentinel: ``search(engines=...)`` defaults to the client's configured engines.
+
+    Three states are meaningful, which is why a plain ``None`` default won't do:
+    *use the client default* (general web — the curated set is mandatory, an empty
+    set times out), *omit the param* (``engines=None`` — the news category supplies
+    its own fast engines; forcing the general set pollutes it), or *an explicit set*.
+    """
+
+
+_DEFAULT_ENGINES = _DefaultEngines()
 
 
 class SearchResult(BaseModel):
@@ -137,19 +151,20 @@ class SearXNGClient:
         query: str,
         *,
         categories: str | None = None,
+        engines: str | None | _DefaultEngines = _DEFAULT_ENGINES,
         extra_params: dict[str, str] | None = None,
     ) -> list[SearchResult]:
         """Run a query and return the typed results; raise ``SearXNGError`` on failure.
 
-        Always sends ``format=json`` + the curated ``engines`` (the verified contract).
-        ``categories`` (e.g. ``news``) and ``extra_params`` (e.g. ``time_range``) are
-        optional refinements.
+        Always sends ``format=json``. ``engines`` defaults to the client's curated set
+        (mandatory for general web — an empty set times out); pass ``engines=None`` to
+        omit it (the ``news`` category supplies its own engines). ``categories`` and
+        ``extra_params`` (e.g. ``time_range``) are optional refinements.
         """
-        params: dict[str, str] = {
-            "q": query,
-            "format": "json",
-            "engines": self._engines,
-        }
+        chosen = self._engines if isinstance(engines, _DefaultEngines) else engines
+        params: dict[str, str] = {"q": query, "format": "json"}
+        if chosen:
+            params["engines"] = chosen
         if categories:
             params["categories"] = categories
         if extra_params:

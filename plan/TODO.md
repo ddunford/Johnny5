@@ -10,14 +10,14 @@ _(none — Phase 6b complete + deployed)_
 
 ## Next
 
-**Phase 7 — Voice (always-on)** — the next phase; see the roadmap entry under *Left*. Expand to a full `plan/phase-7-*.md` (re-run `/bootstrap-from-spec` scope or hand-write) when approached.
+### Phase 7 — Voice (always-on) → `plan/phase-7-voice.md` (16 tasks, backend + devops + frontend + qa + lead-security)
+Always-on voice: wake-word (openWakeWord) → **Speaches STT** (`:8890`, `faster-whisper-small`) → percept (`source=voice`) on the existing `InputQueue` → cycle → optional `speak` tool action (`danger:public`, Conscience-vetted on 6a's dispatch) → **Kokoro TTS** (`:8880`) → **Johnny robot-voice DSP** (existing `voice/` PoC) → speakers. **The defining constraint:** STT/TTS are CPU-bound seconds — speech I/O lives in a separate `audio_daemon` sidecar (owns `/dev/snd`), talks to the api via the existing `/api/v1/input` (speech-in) + Redis (speech-out + activity); the cognitive heartbeat NEVER waits on audio (the load-bearing architectural test). Unprompted speech via Deliberation's new `Connection → speak` mapping. Barge-in is daemon-local. Voice activity flows through the existing `/api/v1/state` + `/ws/state`. **Done = you can talk to him out loud and he talks back unprompted, in his own voice.**
+
+**Done = he speaks unprompted in his own voice.** Run `/plan-review phase 7` then `/team-execute phase 7`. **Out of scope (later):** speaker recognition / multi-speaker; streaming partial transcripts; outward messaging push/Slack/Gmail (P8); self-modification of the voice prompt (P9); physical voice on a robot body (P10); in-browser TTS.
 
 > **Phase 6b — Tool belt (the curiosity loop): ✅ COMPLETE + DEPLOYED** (`plan/phase-6b-tool-belt.md`, all 16 tasks). All 9 tools on 6a's vetted substrate (web_search/web_fetch[SSRF-hardened]/news/code_exec[scoped-proxy sandbox]/note/schedule_wakeup/memory_search/write); Deliberation maps drives→tools; the **curiosity loop is live** — deployed, and Johnny autonomously read news on his own (idle→read→remember→eased). AuditPanel shows the durable action trail. Security review PASS (SSRF @live, sandbox escape 9/9, 2 LOW residuals → hardening backlog above). Full suite 508×3 deterministic. Deployed to the dev stack (Johnny woke intact: thoughts 1452→1480). **Out of scope (later):** messaging (P8), self-ops/self-code (P9), social presence (post-v1).
 
 ## Left (roadmap — expand to full phase files as we approach)
-
-### Phase 7 — Voice (always-on)
-Wake-word (openWakeWord) → **Speaches STT** (`:8890`, `Systran/faster-whisper-small`) → percept; **Kokoro TTS** (`:8880`) → **Johnny robot-voice DSP** out (see `voice/` — PoC built); unprompted speech driven by affect/drives; barge-in. CPU TTS/STT latency is significant → stream/queue, never block the cycle. **Done = you can talk to him out loud and he talks back, unprompted, in his own voice.**
 
 ### Phase 8 — Push / messaging
 Outbound contact (push/Slack/Gmail) when Connection drive is high or he wants to share/needs approval. Rate-limited by the Social Model. **Done = he reaches out to you on his own.**

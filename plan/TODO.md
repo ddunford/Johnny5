@@ -6,12 +6,13 @@ Single source of truth for open work, in order. Move items between sections; del
 
 ## In progress
 
-### Phase 6b — Tool belt (the curiosity loop) — EXECUTING → `plan/phase-6b-tool-belt.md` (16 tasks incl. the do-first `ctl.sh test` guard)
-The world-touching tools on 6a's now-shipped vetted substrate (Conscience CHECK + `EffectorDispatch` ACT + append-only `action_log` + budget hard-gate + redaction — all live): `web_search`/`web_fetch`(**SSRF-hardened**)/`news` (the primary curiosity feed → consolidated into memory), `code_exec` (**escape-resistant sandbox container**), `note`, `schedule_wakeup`, `memory_search/write`; Deliberation extended to pick external tools; AuditPanel renders the durable `action_log` trail (6b.14 — backend read shipped in 6a). **The curiosity loop goes live: idle → reads the world → remembers → drive eased.** Workers: backend (fastapi) + devops + qa; lead handles security review (6b.13 SSRF/sandbox) + frontend (6b.14). 2 LOW advisories from the 6a security review folded into `TASK-6b.13`.
+_(none — Phase 6b complete + deployed)_
 
 ## Next
 
-**Phase 7 — Voice (always-on)** — the next phase after 6b; see the roadmap entry under *Left*. Expand to a full `plan/phase-7-*.md` (re-run `/bootstrap-from-spec` scope or hand-write) when approached.
+**Phase 7 — Voice (always-on)** — the next phase; see the roadmap entry under *Left*. Expand to a full `plan/phase-7-*.md` (re-run `/bootstrap-from-spec` scope or hand-write) when approached.
+
+> **Phase 6b — Tool belt (the curiosity loop): ✅ COMPLETE + DEPLOYED** (`plan/phase-6b-tool-belt.md`, all 16 tasks). All 9 tools on 6a's vetted substrate (web_search/web_fetch[SSRF-hardened]/news/code_exec[scoped-proxy sandbox]/note/schedule_wakeup/memory_search/write); Deliberation maps drives→tools; the **curiosity loop is live** — deployed, and Johnny autonomously read news on his own (idle→read→remember→eased). AuditPanel shows the durable action trail. Security review PASS (SSRF @live, sandbox escape 9/9, 2 LOW residuals → hardening backlog above). Full suite 508×3 deterministic. Deployed to the dev stack (Johnny woke intact: thoughts 1452→1480). **Out of scope (later):** messaging (P8), self-ops/self-code (P9), social presence (post-v1).
 
 ## Left (roadmap — expand to full phase files as we approach)
 

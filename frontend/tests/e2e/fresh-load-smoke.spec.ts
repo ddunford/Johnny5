@@ -22,6 +22,15 @@ test.describe("fresh-load smoke · empty Johnny", () => {
   test("every panel cold-loads against real empty responses with no blank/console error/crash", async ({
     page,
   }) => {
+    // This is the EMPTY-Johnny smoke — it asserts fresh-state responses (no thoughts,
+    // never slept, empty trails). Skip on a populated/deployed stack: per the 6b
+    // decision A, the live-empty variant runs only against a genuinely-empty stack;
+    // the empty render path is otherwise covered by the AuditPanel component test
+    // (exact empty copy + no nullish crash) + the contract empty-fixture projection.
+    const probe = await page.request.get("/api/v1/thoughts", { headers: { "X-Token": TOKEN } });
+    const populated = probe.ok() && (((await probe.json()).thoughts ?? []).length > 0);
+    test.skip(populated, "stack is populated — run the empty smoke against an empty-Johnny stack");
+
     const errors = collectPageErrors(page);
     await attach(page);
 
@@ -44,7 +53,14 @@ test.describe("fresh-load smoke · empty Johnny", () => {
     await expect(page.getByText("No facts yet.")).toBeVisible();
 
     await gotoApp(page, "/audit");
+    // The live bus feed AND the durable Action trail (the Core `action_log`, FC-1) both start
+    // empty on a fresh Johnny — neither must blank or throw on its first-ever (zero-row) load
+    // (the P5b crash-on-first-load class: `Cannot read properties of undefined`). The durable
+    // trail's empty default is `{actions: []}` until a tool runs through the dispatch.
     await expect(page.getByText("Nothing on the bus yet.")).toBeVisible();
+    await expect(page.getByTestId("audit-actions-empty")).toHaveText(
+      "No actions yet — nothing has run through the dispatch.",
+    );
 
     await gotoApp(page, "/state");
     await expect(page.getByText("He has never slept yet.")).toBeVisible();

@@ -9,7 +9,7 @@
 ### TC-6b.1: `web_search` (SearXNG)
 **Steps:** Run `web_search` with a query (stub SearXNG for the deterministic test; one `@live` against `inference.lan:8889`).
 **Expected:** Returns ranked results (title/url/snippet) in the typed shape; empty query → arg-validation error; SearXNG-down → graceful tool error (not a cycle crash). `@live` confirms the real contract.
-**Status:** ⬜
+**Status:** ✅ `tests/effectors/test_web_search.py` (ranked results, caps, SearXNG-down graceful, empty-results, strict args) + `test_searxng.py` (client + projection pinned to captured envelopes, **incl. `@live` round-trips** `test_live_searxng_*`). Backend-authored, QA-verified green.
 
 ### TC-6b.2: `web_fetch` extracts clean text
 **Steps:** Fetch an allowed http(s) URL (stub server); assert extraction.
@@ -19,12 +19,12 @@
 ### TC-6b.3: `news` browsing
 **Steps:** Browse news by topic/recency (stub + one `@live`).
 **Expected:** Returns recent items in the typed shape; topic filter works; this is the curiosity feed Deliberation pulls.
-**Status:** ⬜
+**Status:** ✅ `tests/effectors/test_news.py` (news category, newest-first dated-before-undated, count cap, SearXNG-down graceful, strict args) + `test_searxng.py` news projection + `@live` news round-trip. Backend-authored, QA-verified green.
 
 ### TC-6b.4: The curiosity loop (the headline)
 **Steps:** Frozen clock, stub SearXNG + stub summariser. Drive Curiosity over threshold → let the cycle run.
 **Expected:** Curiosity urge → arbiter goal → Deliberation proposes a `news`/`web_search` `(tool,args)` → Conscience allows → tool runs → `WebReadConsolidator` writes an **episode + semantic fact with url provenance** → the satisfaction event eases Curiosity. A later recall surfaces the consolidated fact. The full drive→world→memory→ease loop, deterministic.
-**Status:** ⬜
+**Status:** ✅ Covered in three layers, all green in-network: **(qa) `tests/effectors/test_curiosity_loop.py`** — the full REAL-component E2E: idle accrual → real Deliberation proposes a `news` tool action → real vetted+audited dispatch (one `action_log` row) → real `WebReadConsolidator` writes a `web_read` episode + a provenance-linked fact (`fact.source_episode_ids == [episode.id]`) → Curiosity eased below threshold → goal resolved → a later episodic + semantic recall surfaces it; plus a veto path that eases nothing. **(backend) `test_curiosity_loop_wiring.py`** — the cycle orchestrates ease-on-consolidation (not on raw fetch). **(backend) `test_deliberation_external_tools.py`** — the drive→tool planning map. Deterministic (frozen clock + stub SearXNG + `router=None` fallback + deterministic embedder).
 
 ### TC-6b.5: `note` (journal)
 **Steps:** Write a note via the tool; read it back.
@@ -39,7 +39,7 @@
 ### TC-6b.7: `code_exec` runs in the sandbox
 **Steps:** Run a trivial Python snippet (stub/dry for the deterministic test; one `@live` against the real sandbox container).
 **Expected:** Returns stdout/result; a snippet that errors → captured error, not a cycle crash; a snippet that exceeds the timeout/memory → killed + reported. `@live` confirms it runs in the isolated container.
-**Status:** ⬜
+**Status:** ✅ (deterministic) `tests/effectors/test_code_exec.py` (stdout projection, user-exception graceful, timeout reported, resource-kill reported, sandbox-unavailable graceful, oversize-snippet rejected, strict args) + `test_code_exec_contract.py` (`SandboxVerdict` pinned to the launcher envelope). Backend-authored, QA-verified green. ⏳ The **`@live` real-sandbox-container exec** leg is TC-6b.12 / #14 (gated on the api recreate — coordinated with the lead).
 
 ### TC-6b.8: `memory_search` / `memory_write`
 **Steps:** Write a memory + search for it via the tools.
@@ -59,7 +59,7 @@
 ### TC-6b.11: Tools wired + UI read surface
 **Steps:** Boot the runtime; confirm all tools registered; GET the `note`/`action_log` read endpoints.
 **Expected:** Registry has every tool; the dispatch path is the only way they run; `/api/v1/audit` shows tool actions; notes are readable. No regression to Phases 2–5.
-**Status:** ⬜
+**Status:** ✅ `tests/effectors/test_belt.py` (all 9 tools registered with correct hazard classes; `schedule_wakeup` shares the cycle's Scheduler instance) + the two QA-folded acceptance assertions: a REAL tool dispatched through `EffectorDispatch`+`AuditWriter` → an `action_log` row (in `test_curiosity_loop.py`) and the cycle's run-loop phase actually firing due wakeups through its scheduler (`tests/cognition/test_cycle_scheduler_wiring.py`). No-regression: 280 passed across cognition+effectors+drives in-network.
 
 ### TC-6b.12: No regression + cost-bound
 **Steps:** Full suite 3× in-network. Run an idle stretch and watch the action cadence.

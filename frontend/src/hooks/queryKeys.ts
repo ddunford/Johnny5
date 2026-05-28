@@ -1,4 +1,5 @@
 import type { AuditQuery } from "@/services/auditApi";
+import type { ActionAuditQuery } from "@/services/auditActionsApi";
 import type { MemoryQuery } from "@/services/memoryApi";
 
 /**
@@ -13,5 +14,7 @@ export const queryKeys = {
   goals: (limit?: number) => ["goals", limit ?? null] as const,
   sleeps: (limit?: number) => ["sleeps", limit ?? null] as const,
   audit: (query: AuditQuery) => ["audit", query.type ?? null, query.limit ?? null] as const,
+  auditActions: (query: ActionAuditQuery) =>
+    ["audit", "actions", query.verdict ?? null, query.limit ?? null] as const,
   self: (notesLimit?: number) => ["self", notesLimit ?? null] as const,
 } as const;

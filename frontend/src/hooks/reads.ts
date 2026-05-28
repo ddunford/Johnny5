@@ -12,6 +12,11 @@ import { fetchEpisodes, fetchFacts, type MemoryQuery } from "@/services/memoryAp
 import { fetchGoals } from "@/services/goalsApi";
 import { fetchSleeps } from "@/services/sleepsApi";
 import { fetchAudit, type AuditQuery } from "@/services/auditApi";
+import {
+  fetchAuditActions,
+  type ActionAudit,
+  type ActionAuditQuery,
+} from "@/services/auditActionsApi";
 import { fetchSelf } from "@/services/selfApi";
 import type {
   AuditEvent,
@@ -71,6 +76,15 @@ export function useAudit(query: AuditQuery = {}): UseQueryResult<AuditEvent[]> {
   return useQuery({
     queryKey: queryKeys.audit(query),
     queryFn: ({ signal }) => fetchAudit(query, signal),
+  });
+}
+
+/** The durable, Core-written action_log trail (`GET /api/v1/audit/actions`) — the
+ * trustworthy record, distinct from the live bus feed in {@link useAudit}. */
+export function useAuditActions(query: ActionAuditQuery = {}): UseQueryResult<ActionAudit[]> {
+  return useQuery({
+    queryKey: queryKeys.auditActions(query),
+    queryFn: ({ signal }) => fetchAuditActions(query, signal),
   });
 }
 

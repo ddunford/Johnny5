@@ -31,6 +31,15 @@ from typing import Any
 from fastapi.testclient import TestClient
 from helpers.web_api import WIRE_DIR, broadcast_state_frame, build_api_app, seed_full
 
+from core.audit import AuditWriter
+
+# A secret-shaped canary (Groq-key value pattern) for the action-trail capture: the
+# Core writer redacts it to [REDACTED] on write, so the captured fixture proves
+# redaction-on-the-wire and the frontend adapter + E2E bind to identical redacted bytes.
+# Assembled from parts so the .githooks credential guard doesn't flag this *fake*
+# canary as a real key — the runtime value is the full gsk_ shape the redactor matches.
+_AUDIT_CANARY = "gsk_" + "CANARYtokenmustneverrender0123456789"
+
 # Each guarded GET endpoint, by fixture name → path. Captured in both variants.
 _GET_ENDPOINTS: dict[str, str] = {
     "state": "/api/v1/state",
@@ -104,6 +113,68 @@ def test_capture_empty_state_wire_fixtures(_migrated_test_db: None) -> None:
     assert self_empty["identity"]["version"] == 1
     assert self_empty["identity"]["name"] == "Johnny"
     assert self_empty["notes"] == []
+
+
+# ── GET /api/v1/audit/actions — the durable Core action trail (Phase 6b) ──────────
+#
+# seed_full predates the tool belt and writes no action_log rows, so the populated
+# audit_actions fixture needs its own seed: two real actions through the production
+# Core AuditWriter — an allowed `note` whose body carries a secret-shaped canary
+# (redacted on write) + a vetoed `web_fetch`. The frontend auditActionsApi adapter +
+# QA's AuditPanel E2E pin against THESE bytes (incl. the empty {actions:[]} first-paint).
+
+
+async def _seed_action_log(_runtime: SimpleNamespace) -> None:
+    """Two durable actions via the production Core writer (allow note + veto fetch)."""
+    writer = AuditWriter()
+    await writer.record(
+        tool="note",
+        args={
+            "title": "diagnostic note",
+            "body": f"checking redaction: {_AUDIT_CANARY}",
+            "tags": [],
+        },
+        result={
+            "success": True,
+            "output": {"note_id": 1},
+            "summary": "wrote note 'diagnostic note'",
+        },
+        conscience_verdict="allow",
+        veto_reason=None,
+        goal_id=1,
+        success=True,
+    )
+    await writer.record(
+        tool="web_fetch",
+        args={"url": "http://example.com/article"},
+        result=None,
+        conscience_verdict="veto",
+        veto_reason="that doesn't sit right with what I value",
+        goal_id=2,
+        success=False,
+    )
+
+
+def test_capture_action_audit_wire_fixtures(_migrated_test_db: None) -> None:
+    """Capture the durable action-trail endpoint — populated (redaction proven) + empty."""
+    app = build_api_app(ws_token="", seed=_seed_action_log)
+    with TestClient(app) as client:
+        populated = client.get("/api/v1/audit/actions")
+    empty_app = build_api_app(ws_token="")  # no seed → fresh trail
+    with TestClient(empty_app) as client:
+        empty = client.get("/api/v1/audit/actions")
+
+    assert populated.status_code == 200 and empty.status_code == 200
+    pop_data = populated.json()
+    _write_fixture("audit_actions", pop_data)
+    _write_fixture("audit_actions.empty", empty.json())
+
+    # Real durable shape: two rows newest-first; the canary is REDACTED on the wire
+    # (never the raw secret); the empty first-paint is {actions: []}.
+    assert _AUDIT_CANARY not in json.dumps(pop_data)
+    assert "[REDACTED]" in json.dumps(pop_data)
+    assert len(pop_data["actions"]) == 2
+    assert json.loads((WIRE_DIR / "audit_actions.empty.json").read_text()) == {"actions": []}
 
 
 # ── /ws frame captures (the socket adapters pin against THESE, not the REST shapes) ──

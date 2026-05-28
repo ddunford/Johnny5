@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { loadWire } from "@/test/wireFixtures";
 import { adaptAudit, type AuditEnvelope } from "./auditApi";
+import { adaptAuditActions, type ActionAuditEnvelope } from "./auditActionsApi";
 import { adaptInputAck, type InputEnvelope } from "./conversation";
 import { adaptGoals, type GoalsEnvelope } from "./goalsApi";
 import { adaptEpisodes, adaptFacts, type EpisodesEnvelope, type FactsEnvelope } from "./memoryApi";
@@ -292,6 +293,56 @@ describe("auditApi · adaptAudit", () => {
 
   it("projects an empty bus log", () => {
     expect(adaptAudit(loadWire<AuditEnvelope>("audit.empty"))).toEqual([]);
+  });
+});
+
+describe("auditActionsApi · adaptAuditActions", () => {
+  it("projects the durable action trail newest-first, veto result null, secrets redacted", () => {
+    const actions = adaptAuditActions(loadWire<ActionAuditEnvelope>("audit_actions"));
+    expect(actions).toHaveLength(2);
+    // ts is DB now()-stamped (not a frozen seed), so it's read from the fixture, not
+    // asserted — every other field is a literal so a server rename fails on re-capture.
+    expect(actions[0]).toEqual({
+      id: 2,
+      ts: actions[0].ts,
+      tool: "web_fetch",
+      args: { url: "http://example.com/article" },
+      result: null,
+      conscience_verdict: "veto",
+      veto_reason: "that doesn't sit right with what I value",
+      goal_id: 2,
+      success: false,
+    });
+    expect(actions[1]).toEqual({
+      id: 1,
+      ts: actions[1].ts,
+      tool: "note",
+      args: { body: "checking redaction: [REDACTED]", tags: [], title: "diagnostic note" },
+      result: { output: { note_id: 1 }, success: true, summary: "wrote note 'diagnostic note'" },
+      conscience_verdict: "allow",
+      veto_reason: null,
+      goal_id: 1,
+      success: true,
+    });
+    // The redaction guarantee, on the wire: the raw secret never reaches the UI.
+    expect(JSON.stringify(actions)).not.toContain("gsk_CANARY");
+    expect(JSON.stringify(actions)).toContain("[REDACTED]");
+  });
+
+  it("projects the empty first-paint trail to [] (the panel's zero-row default)", () => {
+    expect(adaptAuditActions(loadWire<ActionAuditEnvelope>("audit_actions.empty"))).toEqual([]);
+  });
+
+  it("wishlist guard: a renamed verdict field diverges from the contract", () => {
+    const mutated = JSON.parse(JSON.stringify(loadWire("audit_actions"))) as {
+      actions: Array<Record<string, unknown>>;
+    };
+    for (const a of mutated.actions) {
+      a.verdict = a.conscience_verdict;
+      delete a.conscience_verdict;
+    }
+    const actions = adaptAuditActions(mutated as unknown as ActionAuditEnvelope);
+    expect(actions[0].conscience_verdict).toBeUndefined();
   });
 });
 

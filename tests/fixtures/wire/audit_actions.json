@@ -1,0 +1,38 @@
+{
+  "actions": [
+    {
+      "id": 2,
+      "ts": "2026-05-28T01:05:32.820582+00:00",
+      "tool": "web_fetch",
+      "args": {
+        "url": "http://example.com/article"
+      },
+      "result": null,
+      "conscience_verdict": "veto",
+      "veto_reason": "that doesn't sit right with what I value",
+      "goal_id": 2,
+      "success": false
+    },
+    {
+      "id": 1,
+      "ts": "2026-05-28T01:05:32.717589+00:00",
+      "tool": "note",
+      "args": {
+        "body": "checking redaction: [REDACTED]",
+        "tags": [],
+        "title": "diagnostic note"
+      },
+      "result": {
+        "output": {
+          "note_id": 1
+        },
+        "success": true,
+        "summary": "wrote note 'diagnostic note'"
+      },
+      "conscience_verdict": "allow",
+      "veto_reason": null,
+      "goal_id": 1,
+      "success": true
+    }
+  ]
+}
